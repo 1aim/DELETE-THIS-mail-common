@@ -66,9 +66,13 @@ macro_rules! def_headers {
     (
         test_name: $tn:ident,
         scope: $scope:ident,
-        $($multi:tt $name:ident, unchecked { $hname:tt }, $component:ident, $validator:ident),+
+        $(
+            $(#[$attr:meta])*
+            $multi:tt $name:ident, unchecked { $hname:tt }, $component:ident, $validator:ident
+        ),+
     ) => (
         $(
+            $(#[$attr])*
             pub struct $name;
 
             impl $crate::headers::Header for  $name {
