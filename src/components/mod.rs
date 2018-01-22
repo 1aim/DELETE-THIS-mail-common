@@ -8,7 +8,6 @@ use grammar::is_vchar;
 use utils::{HeaderTryFrom, HeaderTryInto};
 use data::Input;
 use codec::{EncodeHandle, EncodableInHeader};
-use codec::transfer_encoding::TransferEncoding;
 
 /// A unstructured header field implementation which validates the given input
 /// but does not encode any utf8 even if it would have been necessary (it will
@@ -79,51 +78,4 @@ impl EncodableInHeader for RawUnstructured {
     }
 }
 
-
-// we reuse the TransferEncoding as component
-impl EncodableInHeader for  TransferEncoding {
-
-    fn encode(&self, handle: &mut EncodeHandle) -> Result<()> {
-        handle.write_str( self.repr() )?;
-        Ok( () )
-    }
-}
-
-
-
-
-#[cfg(test)]
-mod test {
-    use super::{TransferEncoding};
-
-    ec_test! {_7bit, {
-        TransferEncoding::_7Bit
-    } => ascii => [
-        Text "7bit"
-    ]}
-
-    ec_test! {_8bit, {
-        TransferEncoding::_8Bit
-    } => ascii => [
-        Text "8bit"
-    ]}
-
-    ec_test!{binary, {
-        TransferEncoding::Binary
-    } => ascii => [
-        Text "binary"
-    ]}
-
-    ec_test!{base64, {
-        TransferEncoding::Base64
-    } => ascii => [
-        Text "base64"
-    ]}
-
-    ec_test!{quoted_printable, {
-        TransferEncoding::QuotedPrintable
-    } => ascii => [
-        Text "quoted-printable"
-    ]}
-}
 

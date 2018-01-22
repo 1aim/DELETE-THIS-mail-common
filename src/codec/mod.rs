@@ -1,6 +1,5 @@
 use soft_ascii_string::SoftAsciiStr;
 
-pub mod transfer_encoding;
 pub mod quoted_printable;
 pub mod base64;
 pub mod idna;
