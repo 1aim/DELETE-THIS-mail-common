@@ -41,6 +41,9 @@ error_chain! {
     }
 
     errors {
+        HeaderValidationFailure {
+            description("validation of header in HeaderMap failed")
+        }
 
         HeaderComponentEncodingFailure {
             description("encoding header component failed")
