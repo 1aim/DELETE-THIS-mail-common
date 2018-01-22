@@ -140,7 +140,7 @@ macro_rules! def_headers {
     (_PRIV_boolify anyNumber) => ({ false });
     (_PRIV_boolify maxOne) => ({ true });
     (_PRIV_boolify $other:tt) => (
-        compiler_error!( "only `maxOne` or `anyNumber` are valid" )
+        compile_error!( "only `maxOne` or `anyNumber` are valid" )
     );
     ( _PRIV_impl_marker anyNumber $name:ident ) => (
         //do nothing here
