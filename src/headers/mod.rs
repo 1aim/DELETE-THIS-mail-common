@@ -2,7 +2,7 @@ use std::fmt;
 
 use soft_ascii_string::SoftAsciiStr;
 
-use error::*;
+use error::Result;
 use grammar::is_ftext;
 
 

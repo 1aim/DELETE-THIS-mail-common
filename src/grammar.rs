@@ -223,7 +223,7 @@ pub fn is_token(s: &str) -> bool {
 /// based on RFC 2047
 pub mod encoded_word {
     use nom;
-    use error::*;
+    use error::Result;
     use super::{  is_especial, is_ascii_vchar };
 
     pub const MAX_ECW_LEN: usize = 75;
@@ -278,7 +278,7 @@ pub mod encoded_word {
 
         match res {
             nom::IResult::Done( rest, result ) => {
-                assert!( rest.len() == 0, "[BUG] used nom::eof!() but rest.len() > 0" );
+                assert_eq!(rest.len(), 0, "[BUG] used nom::eof!() but rest.len() > 0");
                 Ok( result )
             },
             nom::IResult::Incomplete( .. ) => bail!( "incomplete encoded word: {:?}", word ),

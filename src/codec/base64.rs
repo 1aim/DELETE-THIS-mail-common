@@ -1,4 +1,4 @@
-use error::*;
+use error::Result;
 use {base64 as extern_base64};
 use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar};
 

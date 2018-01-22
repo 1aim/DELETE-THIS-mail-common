@@ -1,5 +1,5 @@
 use soft_ascii_string::{ SoftAsciiChar, SoftAsciiString };
-use error::*;
+use error::Result;
 use { quoted_printable as extern_quoted_printable };
 
 use super::traits::EncodedWordWriter;

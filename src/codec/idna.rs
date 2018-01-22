@@ -1,4 +1,4 @@
-use error::*;
+use error::{ ErrorKind, Result};
 
 use idna;
 
@@ -28,7 +28,7 @@ fn _puny_code_domain( domain: &str ) -> Result<SoftAsciiString> {
         },
         Err( err ) => {
             //FIXME(UPSTREAM): uts46::Errors does not implement Error... ;=(
-            bail!(ErrorKind::PunyCodeingDomainFailed(err));
+            bail!(ErrorKind::PunyCodeingDomainFailed(err))
         }
     }
 }

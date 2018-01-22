@@ -969,7 +969,7 @@ mod test {
 #[cfg(all(feature="traceing", test))]
 mod test {
     use soft_ascii_string::{ SoftAsciiChar, SoftAsciiStr};
-    use error::*;
+    use error::Result;
     use grammar::MailType;
 
     use super::TraceToken::*;

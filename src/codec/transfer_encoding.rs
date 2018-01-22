@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use codec::{base64, quoted_printable};
 use soft_ascii_string::SoftAsciiStr;
-use error::*;
+use error::{ ErrorKind, Result};
 use utils::FileBuffer;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

@@ -5,7 +5,7 @@ use std::ascii::AsciiExt;
 use soft_ascii_string::SoftAsciiString;
 
 use utils::HeaderTryFrom;
-use error::*;
+use error::Result;
 
 use super::inner_item::{ InnerUtf8, InnerAscii };
 

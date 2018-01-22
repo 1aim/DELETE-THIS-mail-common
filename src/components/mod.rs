@@ -3,7 +3,7 @@
 
 use soft_ascii_string::SoftAsciiStr;
 
-use error::*;
+use error::Result;
 use grammar::is_vchar;
 use utils::{DateTime, HeaderTryFrom, HeaderTryInto};
 use data::Input;

@@ -12,7 +12,7 @@ use total_order_multi_map::{
     EntryValues
 };
 
-use error::*;
+use error::{ErrorKind, Error, Result};
 
 use utils::HeaderTryInto;
 use codec::EncodableInHeader;

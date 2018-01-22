@@ -1,6 +1,6 @@
 use soft_ascii_string::{ SoftAsciiStr, SoftAsciiChar };
 
-use error::*;
+use error::Result;
 
 use super::EncodedWordEncoding;
 
