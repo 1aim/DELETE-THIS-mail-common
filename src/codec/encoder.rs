@@ -882,7 +882,9 @@ pub fn simplify_trace_tokens<I: IntoIterator<Item=TraceToken>>(inp: I) -> Vec<Tr
 #[cfg(feature="traceing")]
 #[macro_export]
 macro_rules! ec_test {
-    ( $name:ident, $inp:block => $mt:tt => [ $($tokens:tt)* ] ) => (
+    ( $(#[$attr:meta])* $name:ident, $inp:block => $mt:tt => [ $($tokens:tt)* ] ) => (
+
+        $(#[$attr])*
         #[test]
         fn $name() {
             #![allow(unused_mut)]
