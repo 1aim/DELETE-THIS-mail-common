@@ -959,6 +959,8 @@ macro_rules! ec_test {
 //    )
 }
 
+#[cfg(all(not(feature="traceing"), test))]
+compile_error! { "testing needs feature `traceing` to be enabled" }
 
 #[cfg(all(not(feature="traceing"), test))]
 mod test {
