@@ -120,7 +120,7 @@ macro_rules! def_headers {
                 can_be_trait_object::<$scope::$component>( None );
             )+
             for name in HEADER_NAMES {
-                let res = $crate::headers::HeaderName::validate_name(
+                let res = $crate::headers::HeaderName::new(
                     $crate::headers::_SoftAsciiStr::from_str(name).unwrap()
                 );
                 if res.is_err() {
