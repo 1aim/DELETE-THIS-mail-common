@@ -469,8 +469,8 @@ mod test {
         def_headers! {
             test_name: validate_header_names,
             scope: components,
-            1 Subject, unchecked { "Subject" }, RawUnstructured, None,
-            + Comments, unchecked { "Comments" }, RawUnstructured, None
+            Subject, maxOne, unchecked { "Subject" }, RawUnstructured, None,
+            Comments, anyNumber, unchecked { "Comments" }, RawUnstructured, None
         }
     }
 
@@ -478,8 +478,8 @@ mod test {
         def_headers! {
             test_name: validate_header_names,
             scope: super,
-            1 Subject,  unchecked { "Subject" },  OtherComponent, None,
-            + Comments, unchecked { "Comments" }, OtherComponent, None
+            Subject, maxOne, unchecked { "Subject" },  OtherComponent, None,
+            Comments, anyNumber, unchecked { "Comments" }, OtherComponent, None
         }
     }
 

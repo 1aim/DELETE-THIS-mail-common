@@ -24,10 +24,11 @@ pub use soft_ascii_string::{ SoftAsciiStr as _SoftAsciiStr };
 ///    name collisions. Use `self` to use the current scope.
 /// 3. a list of header definitions consisting of:
 ///
-///    1. `1` or `+`, stating wether the header can appear at most one time (1) or more times (+)
-///       (not that only `Date`+`From` are required headers, no other can be made into such)
-///    2. `<typename>` the name the type of the header will have, i.e. the name of a zero-sized
+///    1. `<typename>` the name the type of the header will have, i.e. the name of a zero-sized
 ///       struct which will be generated
+///    2. `<qunatity>`, stating weather the header can appear at most one time (`maxOne`)
+///       or any number of times (`anyNumber`). Note: that only `Date` and `From` are
+///       required headers, no other can be made into such.
 ///    3. `unchecked` a hint to make people read the documentation and not forget the the
 ///       folowing data is `unchecked` / only vaidated in the auto-generated test
 ///    4. `"<header_name>"` the header name in a syntax using `'-'` to serperate words,
@@ -54,11 +55,12 @@ pub use soft_ascii_string::{ SoftAsciiStr as _SoftAsciiStr };
 ///     // the scope from which all components should be imported
 ///     // E.g. `DateTime` refers to `components::DateTime`.
 ///     scope: components,
-///     // definitions of the headers
-///     1 Date,     unchecked { "Date"          },  DateTime,       None,
-///     1 From,     unchecked { "From"          },  MailboxList,    validator_from,
-///     1 Subject,  unchecked { "Subject"       },  Unstructured,   None,
-///     + Comments, unchecked { "Comments"      },  Unstructured,   None,
+///     // definitions of the headers or the form
+///     // <type_name>, <quantitiy>, unchecked { <struct_name> }, <component>, <contextual_validator>
+///     Date,     maxOne,    unchecked { "Date"          },  DateTime,       None,
+///     From,     maxOne,    unchecked { "From"          },  MailboxList,    validator_from,
+///     Subject,  maxOne,    unchecked { "Subject"       },  Unstructured,   None,
+///     Comments, anyNumber, unchecked { "Comments"      },  Unstructured,   None,
 /// }
 /// ```
 #[macro_export]
@@ -68,7 +70,7 @@ macro_rules! def_headers {
         scope: $scope:ident,
         $(
             $(#[$attr:meta])*
-            $multi:tt $name:ident, unchecked { $hname:tt }, $component:ident, $validator:ident
+            $name:ident, $multi:ident, unchecked { $hname:tt }, $component:ident, $validator:ident
         ),+
     ) => (
         $(
@@ -135,15 +137,15 @@ macro_rules! def_headers {
     );
     (_PRIV_mk_validator None) => ({ None });
     (_PRIV_mk_validator $validator:ident) => ({ Some($validator) });
-    (_PRIV_boolify +) => ({ false });
-    (_PRIV_boolify 1) => ({ true });
+    (_PRIV_boolify anyNumber) => ({ false });
+    (_PRIV_boolify maxOne) => ({ true });
     (_PRIV_boolify $other:tt) => (
-        compiler_error!( "only `1` (for singular) or `+` (for multiple) are valid" )
+        compiler_error!( "only `maxOne` or `anyNumber` are valid" )
     );
-    ( _PRIV_impl_marker + $name:ident ) => (
+    ( _PRIV_impl_marker anyNumber $name:ident ) => (
         //do nothing here
     );
-    ( _PRIV_impl_marker 1 $name:ident ) => (
+    ( _PRIV_impl_marker maxOne $name:ident ) => (
         impl $crate::headers::SingularHeaderMarker for $name {}
     );
 }
