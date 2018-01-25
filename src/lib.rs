@@ -25,6 +25,8 @@ pub use header::{
     HeaderName
 };
 
+pub use utils::{HeaderTryFrom, HeaderTryInto};
+
 
 //NOTE: this would be worth it's own independent crate for utility macros
 #[macro_use]
