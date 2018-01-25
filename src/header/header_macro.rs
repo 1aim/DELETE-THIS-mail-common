@@ -77,17 +77,17 @@ macro_rules! def_headers {
             $(#[$attr])*
             pub struct $name;
 
-            impl $crate::headers::Header for  $name {
+            impl $crate::header::Header for  $name {
                 const MAX_COUNT_EQ_1: bool = def_headers!(_PRIV_boolify $multi);
                 type Component = $scope::$component;
 
-                fn name() -> $crate::headers::HeaderName {
+                fn name() -> $crate::header::HeaderName {
                     let as_str: &'static str = $hname;
-                    $crate::headers::HeaderName::from_ascii_unchecked( as_str )
+                    $crate::header::HeaderName::from_ascii_unchecked( as_str )
                 }
 
                 const CONTEXTUAL_VALIDATOR:
-                    Option<fn(&$crate::headers::HeaderMap) -> $crate::error::Result<()>> =
+                    Option<fn(&$crate::header::HeaderMap) -> $crate::error::Result<()>> =
                         def_headers!{ _PRIV_mk_validator $validator };
             }
         )+
@@ -126,8 +126,8 @@ macro_rules! def_headers {
                 can_be_trait_object::<$scope::$component>( None );
             )+
             for name in HEADER_NAMES {
-                let res = $crate::headers::HeaderName::new(
-                    $crate::headers::_SoftAsciiStr::from_str(name).unwrap()
+                let res = $crate::header::HeaderName::new(
+                    $crate::header::_SoftAsciiStr::from_str(name).unwrap()
                 );
                 if res.is_err() {
                     panic!( "invalid header name: {:?} ({:?})", name, res.unwrap_err() );
@@ -146,6 +146,6 @@ macro_rules! def_headers {
         //do nothing here
     );
     ( _PRIV_impl_marker maxOne $name:ident ) => (
-        impl $crate::headers::SingularHeaderMarker for $name {}
+        impl $crate::header::SingularHeaderMarker for $name {}
     );
 }

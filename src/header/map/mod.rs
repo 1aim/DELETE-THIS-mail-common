@@ -422,7 +422,7 @@ macro_rules! headers {
     ($($header:ty : $val:expr),*) => ({
         //FIXME use catch block once aviable
         (|| -> $crate::error::Result<HeaderMap> {
-            let mut map = $crate::headers::HeaderMap::new();
+            let mut map = $crate::header::HeaderMap::new();
             $(
                 map._insert::<$header, _>( $val )?;
             )*

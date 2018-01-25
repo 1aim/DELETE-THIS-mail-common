@@ -20,6 +20,10 @@ extern crate serde;
 extern crate serde_derive;
 
 
+pub use header::{
+    Header, HeaderMap,
+    HeaderName
+};
 
 
 //NOTE: this would be worth it's own independent crate for utility macros
@@ -33,6 +37,7 @@ pub mod grammar;
 #[cfg_attr(test, macro_use)]
 pub mod codec;
 pub mod data;
-//TODO reexports everything from headers and rename it to header and make it private
-pub mod headers;
+
+pub mod header;
 pub mod components;
+
