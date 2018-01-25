@@ -1,13 +1,11 @@
 use std::any::TypeId;
+use std::ops::Deref;
 use std::cell::RefCell;
 use std::mem;
 use std::fmt::{self, Debug};
 
 use mime::{AnyMediaType, MULTIPART};
 use error::Error;
-
-mod buffer;
-pub use self::buffer::FileBuffer;
 
 
 mod file_meta;
@@ -34,7 +32,9 @@ impl<I> Debug for DebugIterableOpaque<I>
 }
 
 
-pub fn is_multipart_mime( mime: &AnyMediaType) -> bool {
+pub fn is_multipart_mime<T>( mime: &AnyMediaType) -> bool
+    where T: Deref<Target=AnyMediaType>
+{
     mime.type_() == MULTIPART
 }
 
