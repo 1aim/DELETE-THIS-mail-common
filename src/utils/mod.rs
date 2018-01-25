@@ -1,10 +1,8 @@
 use std::any::TypeId;
-use std::ops::Deref;
 use std::cell::RefCell;
 use std::mem;
 use std::fmt::{self, Debug};
 
-use mime::{AnyMediaType, MULTIPART};
 use error::Error;
 
 
@@ -29,13 +27,6 @@ impl<I> Debug for DebugIterableOpaque<I>
         let mut borrow = self.one_use_inner.borrow_mut();
         fter.debug_list().entries(&mut *borrow).finish()
     }
-}
-
-
-pub fn is_multipart_mime<T>( mime: &AnyMediaType) -> bool
-    where T: Deref<Target=AnyMediaType>
-{
-    mime.type_() == MULTIPART
 }
 
 
