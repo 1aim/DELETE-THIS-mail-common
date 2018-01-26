@@ -1,12 +1,12 @@
 
 /// it's easy to overlook the `!` in `assert!(!this_is.really_eycatching())`
-#[macro_export]
+
 macro_rules! assert_not {
     //direct forward + `!`
     ($($t:tt)*) => (assert!(! $($t)*));
 }
 
-#[macro_export]
+
 macro_rules! assert_ok {
     ($val:expr) => ({
         match $val {
@@ -22,7 +22,6 @@ macro_rules! assert_ok {
     });
 }
 
-#[macro_export]
 macro_rules! assert_err {
     ($val:expr) => ({
         match $val {
@@ -38,7 +37,7 @@ macro_rules! assert_err {
     });
 }
 
-#[macro_export]
+
 macro_rules! sep_for {
     ($var:ident in $iter:expr; sep $sep:block; $($rem:tt)* ) => {{
         let mut first = true;
@@ -52,7 +51,7 @@ macro_rules! sep_for {
     }}
 }
 
-#[macro_export]
+
 macro_rules! deref0 {
     (+mut $name:ident => $tp:ty) => (
         deref0!{-mut $name => $tp }
