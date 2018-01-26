@@ -6,7 +6,7 @@ use base64;
 use quoted_printable;
 use idna::uts46::{ Errors as PunyCodeErrors };
 use mime::AnyMediaType;
-use mime::error::ParserError;
+use mime::error::{Error as ParserError};
 
 #[derive(Debug)]
 pub struct MultipleErrorsWraper {
