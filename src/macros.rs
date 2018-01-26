@@ -1,12 +1,12 @@
 
 /// it's easy to overlook the `!` in `assert!(!this_is.really_eycatching())`
-
+#[cfg(test)]
 macro_rules! assert_not {
     //direct forward + `!`
     ($($t:tt)*) => (assert!(! $($t)*));
 }
 
-
+#[cfg(test)]
 macro_rules! assert_ok {
     ($val:expr) => ({
         match $val {
@@ -22,6 +22,7 @@ macro_rules! assert_ok {
     });
 }
 
+#[cfg(test)]
 macro_rules! assert_err {
     ($val:expr) => ({
         match $val {
