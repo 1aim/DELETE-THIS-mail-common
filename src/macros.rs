@@ -39,18 +39,6 @@ macro_rules! assert_err {
 }
 
 
-macro_rules! sep_for {
-    ($var:ident in $iter:expr; sep $sep:block; $($rem:tt)* ) => {{
-        let mut first = true;
-        for $var in $iter {
-            if first { first = false; }
-            else {
-                $sep
-            }
-            $( $rem )*
-        }
-    }}
-}
 
 
 macro_rules! deref0 {
