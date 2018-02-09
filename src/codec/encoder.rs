@@ -4,7 +4,7 @@ use std::result::{ Result as StdResult };
 
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
-use error::{Result, Error};
+use error::{Result, Error, ErrorKind};
 use grammar::is_atext;
 use ::MailType;
 
@@ -508,7 +508,7 @@ impl<'inner> EncodeHandle<'inner> {
             { self.trace.push(TraceToken::NowUtf8) }
             self.internal_write_str(s).into()
         } else {
-            bail!("writing utf8 into non internationalized headers")
+            bail!(ErrorKind::TriedWriting8BitBytesInto7BitData)
         }
     }
 
@@ -728,13 +728,13 @@ impl<'inner> EncodeHandle<'inner> {
             if self.skipped_cr {
                 self.start_new_line()
             } else {
-                bail!("orphan '\n' in header");
+                bail!(ErrorKind::InvalidLineBrake);
             }
             self.skipped_cr = false;
             return Ok(());
         } else {
             if self.skipped_cr {
-                bail!("orphan '\r' in header");
+                bail!(ErrorKind::InvalidLineBrake);
             }
             if ch == '\r' {
                 self.skipped_cr = true;
@@ -747,7 +747,7 @@ impl<'inner> EncodeHandle<'inner> {
         if self.current_line_byte_length() >= LINE_LEN_SOFT_LIMIT {
             if !self.break_line_on_fws() {
                 if self.buffer.len() == LINE_LEN_HARD_LIMIT {
-                    bail!("breached hard line length limit (998 chars excluding CRLF)")
+                    bail!(ErrorKind::HardLineLengthLimitBreached)
                 }
             }
         }

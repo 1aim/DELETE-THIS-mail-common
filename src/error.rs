@@ -96,7 +96,7 @@ error_chain! {
 
         TriedWriting8BitBytesInto7BitData {
             description(
-                "the program tried to write a non ascii string while smtputf8 was not supported" )
+                "the program tried to write a non ascii string while only ascii was supported" )
         }
 
         AtLastOneElementIsRequired {
@@ -150,12 +150,14 @@ error_chain! {
             description( "the byte is not valid in 8bit (content transfer) encoding" )
         }
 
-        Invalide7BitSeq( byte: u8 ) {
-            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\" in 7bit (content transfer) encoding " )
+        InvalidLineBrake {
+            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
         }
-        Invalide8BitSeq( val: u8 ) {
-            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\" in 8bit (content transfer) encoding " )
+
+        HardLineLengthLimitBreached {
+            description("the line length is limited to 998 bytes (excluding tailing \r\n)")
         }
+
 
         BodyFutureResolvedToAnError {
         
@@ -171,6 +173,12 @@ error_chain! {
 
         RegisterExtensionsToLate( extension: String ) {
             description( "can not register extensions after Store/Look-Up-Table was generated" )
+        }
+
+        MalformedEncodedWord(word: String) {
+            description("the encoded word is not well-formed")
+            display("the encoded word {:?} is not well-formed", word)
+
         }
     }
 }

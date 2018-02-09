@@ -200,8 +200,7 @@ impl HeaderMap {
                 //UNWRAP_SAFE: we have at last one element
                 let untyped = bodies.next().unwrap();
                 untyped.downcast_ref::<H::Component>()
-                    .ok_or_else( ||->Error {
-                        "use of different header types with same header name".into() } )
+                    .ok_or_else( || ErrorKind::HeaderTypeMixup.into())
             } )
     }
 
@@ -374,8 +373,7 @@ impl<'a, H> Iterator for TypedBodies<'a, H>
         self.inner.next()
             .map( |tobj| {
                 tobj.downcast_ref::<H::Component>()
-                    .ok_or_else( || -> Error {
-                        "use of different header types with same header name".into() } )
+                    .ok_or_else(|| ErrorKind::HeaderTypeMixup.into())
             } )
     }
 
