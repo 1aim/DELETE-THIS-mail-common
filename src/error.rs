@@ -7,6 +7,7 @@ use quoted_printable;
 use idna::uts46::{ Errors as PunyCodeErrors };
 use mime::AnyMediaType;
 use mime::error::{Error as ParserError};
+use ::MailType;
 
 #[derive(Debug)]
 pub struct MultipleErrorsWraper {

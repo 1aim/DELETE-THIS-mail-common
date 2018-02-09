@@ -5,7 +5,8 @@ use std::result::{ Result as StdResult };
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
 use error::{Result, Error};
-use grammar::{is_atext, MailType};
+use grammar::is_atext;
+use ::MailType;
 
 use super::traits::BodyBuffer;
 
@@ -902,13 +903,13 @@ macro_rules! ec_test {
                 match mt_str.as_str() {
                     "utf8" |
                     "internationalized"
-                        => $crate::grammar::MailType::Internationalized,
+                        => $crate::MailType::Internationalized,
                     "ascii"
-                        =>  $crate::grammar::MailType::Ascii,
+                        =>  $crate::MailType::Ascii,
                     "mime8" |
                     "mime8bit" |
                     "mime8bitenabled"
-                        => $crate::grammar::MailType::Mime8BitEnabled,
+                        => $crate::MailType::Mime8BitEnabled,
                     other => panic!( "invalid name for mail type: {}", other)
                 }
             };
@@ -974,7 +975,7 @@ mod test {
 mod test {
     use soft_ascii_string::{ SoftAsciiChar, SoftAsciiStr};
     use error::Result;
-    use grammar::MailType;
+    use ::MailType;
 
     use super::TraceToken::*;
     use super::{
