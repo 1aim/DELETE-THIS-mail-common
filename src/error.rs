@@ -42,6 +42,12 @@ error_chain! {
     }
 
     errors {
+        InvalidInput(for_usage_in: &'static str, input: String, mail_type: MailType) {
+            description("the given input was invalid for the given use case")
+            display("the input is invalid for usage wrt. {}. Input: {:?} (mt: {:?})",
+                for_usage_in, input, mail_type)
+        }
+
         HeaderValidationFailure {
             description("validation of header in HeaderMap failed")
         }

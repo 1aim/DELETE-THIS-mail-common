@@ -4,6 +4,7 @@
 use soft_ascii_string::SoftAsciiStr;
 
 use error::Result;
+use error::ErrorKind::InvalidInput;
 use grammar::is_vchar;
 use utils::{HeaderTryFrom, HeaderTryInto};
 use data::Input;
@@ -64,10 +65,8 @@ impl EncodableInHeader for RawUnstructured {
         let mail_type = handle.mail_type();
 
         if !self.text.chars().all(|ch| is_vchar(ch, mail_type)) {
-            bail!("encoding error invalid content for raw unstructured: {:?} (mt: {:?})",
-                self.text.as_str(),
-                mail_type
-            )
+            let input = self.text.as_str().to_owned();
+            bail!(InvalidInput("RawUnstructured",input, mail_type))
         }
 
         if handle.mail_type().is_internationalized() {
