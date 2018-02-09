@@ -5,7 +5,9 @@ use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar};
 use super::EncodedWordWriter;
 
 const CHARSET: extern_base64::CharacterSet = extern_base64::CharacterSet::Standard;
-const LINE_WRAP: extern_base64::LineWrap = extern_base64::LineWrap::NoWrap;
+const NO_LINE_WRAP: extern_base64::LineWrap = extern_base64::LineWrap::NoWrap;
+const LINE_WRAP: extern_base64::LineWrap =
+    extern_base64::LineWrap::Wrap(78, extern_base64::LineEnding::CRLF);
 const USE_PADDING: bool = true;
 const ECW_STRIP_WHITESPACE: bool = false;
 const NON_ECW_STRIP_WHITESPACE: bool = true;
@@ -51,7 +53,7 @@ fn _encoded_word_encode<O>( input: &str, out: &mut O )
     where O: EncodedWordWriter
 {
     let config = extern_base64::Config::new(
-        CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, LINE_WRAP
+        CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, NO_LINE_WRAP
     );
 
     debug_assert!( USE_PADDING == true, "size calculation is tailored for padding");
@@ -107,7 +109,7 @@ fn _encoded_word_encode<O>( input: &str, out: &mut O )
 #[inline(always)]
 pub fn encoded_word_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>> {
     Ok( extern_base64::decode_config(input.as_ref(), extern_base64::Config::new(
-        CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, LINE_WRAP
+        CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, NO_LINE_WRAP
     ) )? )
 }
 
@@ -120,6 +122,24 @@ mod test {
     use codec::writer_impl::VecWriter;
     use codec::EncodedWordEncoding;
     use super::*;
+
+    #[test]
+    fn encoding_uses_line_wrap() {
+        let input = concat!(
+            "0123456789", "0123456789",
+            "0123456789", "0123456789",
+            "0123456789", "0123456789",
+        );
+
+        let res = normal_encode(input);
+
+        assert_eq!(res.as_str(),
+           "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nz\r\ng5");
+
+        let dec = normal_decode(res).unwrap();
+
+        assert_eq!(dec, input.as_bytes());
+    }
 
     #[test]
     fn calc_max_input_len_from_max_output_len() {
