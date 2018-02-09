@@ -84,12 +84,9 @@ impl Meta for HeaderMeta {
     type MergeError = Error;
 
     fn check_update(&self, other: &Self) -> StdResult<(), Self::MergeError> {
-        if self.max_count_eq_1 != other.max_count_eq_1 {
-            bail!("trying to mix up Headers with the same name but different quantity limitations");
-        }
-
-        if !self.cmp_validator_eq(other) {
-            bail!("trying to mix up Headers with same name but different contextual validator");
+        if self.max_count_eq_1 != other.max_count_eq_1 || !self.cmp_validator_eq(other) {
+            //TODO potentiall get the information of the header name into this function
+            bail!(ErrorKind::HeaderTypeMixup)
         }
         Ok(())
     }

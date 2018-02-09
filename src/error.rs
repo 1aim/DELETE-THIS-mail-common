@@ -42,6 +42,15 @@ error_chain! {
     }
 
     errors {
+
+        RejectedHeaderNameSchema(name: String) {
+            description("the case of header names is restricted to the schema used in RFC 5322")
+        }
+
+        HeaderTypeMixup {
+            description("multipel header types with the same name, which differ in qunatity or validator")
+        }
+
         InvalidInput(for_usage_in: &'static str, input: String, mail_type: MailType) {
             description("the given input was invalid for the given use case")
             display("the input is invalid for usage wrt. {}. Input: {:?} (mt: {:?})",

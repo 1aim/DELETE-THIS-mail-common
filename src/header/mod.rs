@@ -3,6 +3,7 @@ use std::fmt;
 use soft_ascii_string::SoftAsciiStr;
 
 use error::Result;
+use error::ErrorKind::{InvalidHeaderName, RejectedHeaderNameSchema};
 use grammar::is_ftext;
 
 
@@ -137,24 +138,24 @@ impl HeaderName {
     fn validate_name( name: &SoftAsciiStr ) -> Result<()> {
         let mut begin_of_word = true;
         if name.len() < 1 {
-            bail!( "header names must consist of at last 1 character" );
+            bail!(InvalidHeaderName(name.as_str().to_owned()))
         }
 
         for ch in name.as_str().chars() {
             if !is_ftext( ch ) {
-                bail!( "invalide header name" )
+                bail!(InvalidHeaderName(name.as_str().to_owned()))
             }
             match ch {
                 'a'...'z' => {
                     if begin_of_word {
-                        bail!( "the case of header names is restricted to the shema used in RFC 5322: {}", name );
+                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
                     }
                 },
                 'A'...'Z' => {
                     if begin_of_word {
                         begin_of_word = false;
                     } else {
-                        bail!( "the case of header names is restricted to the shema used in RFC 5322: {}", name );
+                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
                     }
                 },
                 '0'...'9' => {
@@ -162,7 +163,7 @@ impl HeaderName {
                 },
                 ch => {
                     if ch < '!' || ch > '~' || ch == ':' {
-                        bail!( "invalide character for header field name in {:?}", name )
+                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
                     }
                     begin_of_word = true;
                 }
