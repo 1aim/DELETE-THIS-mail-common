@@ -57,13 +57,13 @@ error_chain! {
                 for_usage_in, input, mail_type)
         }
 
-//        HeaderValidationFailure {
-//            description("validation of header in HeaderMap failed")
-//        }
-//
-//        HeaderComponentEncodingFailure {
-//            description("encoding header component failed")
-//        }
+        HeaderValidationFailure {
+            description("validation of header in HeaderMap failed")
+        }
+
+        HeaderComponentEncodingFailure {
+            description("encoding header component failed")
+        }
 //
 //        PathToFileWithoutFileName(path: PathBuf) {
 //            description("malformed path for loading a file")
