@@ -64,12 +64,7 @@ error_chain! {
         HeaderComponentEncodingFailure {
             description("encoding header component failed")
         }
-//
-//        PathToFileWithoutFileName(path: PathBuf) {
-//            description("malformed path for loading a file")
-//            display("malformed path for loading a file: {:?}", path)
-//        }
-//
+
         MultipleErrors(errors: MultipleErrorsWraper) {
             description("multiple errors happened in the same operation")
             display("multiple errors: {}", errors)
@@ -80,11 +75,103 @@ error_chain! {
             display("failed to a the field {:?} to the header map", name)
         }
 
+
+        TriedWriting8BitBytesInto7BitData {
+            description(
+                "the program tried to write a non ascii string while only ascii was supported" )
+        }
+
+        InvalidHeaderName(name: String) {
+            description( "given header name is not valid" )
+            display( "{:?} is not a valid header name", name )
+        }
+
+        PunyCodeingDomainFailed( errors: PunyCodeErrors ) {
+            description( "using puny code to encode the domain failed" )
+        }
+
+        InvalidLineBrake {
+            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
+        }
+
+        HardLineLengthLimitBreached {
+            description("the line length is limited to 998 bytes (excluding tailing \r\n)")
+        }
+
+
+        MalformedEncodedWord(word: String) {
+            description("the encoded word is not well-formed")
+            display("the encoded word {:?} is not well-formed", word)
+
+        }
+
+        //------------------------------------- DEPRECATED --------------------------------//
+
+//        PathToFileWithoutFileName(path: PathBuf) {
+//            description("malformed path for loading a file")
+//            display("malformed path for loading a file: {:?}", path)
+//        }
+
+//        BodyFutureResolvedToAnError {
+//
+//        }
+
+        //TODO mv to `mail-codec`
+        NeedAtLastOneBodyInMultipartMail {
+
+        }
+
+        //TODO mv to `mail-codec`
+        GeneratingMimeFailed {
+
+        }
+
+//        RegisterExtensionsToLate( extension: String ) {
+//            description( "can not register extensions after Store/Look-Up-Table was generated" )
+//        }
+
+//        NeedPlainAndOrHtmlMailBody {
+//
+//        }
+
+        //TODO mv to `mail-codec`
+        ContentTypeAndBodyIncompatible {
+            description( concat!(
+                "given content type is incompatible with body,",
+                "e.g. using a non multipart mime with a multipart body" ) )
+        }
+
+//        UnknownTransferEncoding( encoding: String ) {
+//            description( "the given transfer encoding is not supported" )
+//            display( "the transfer encoding {:?} is not supported", encoding )
+//        }
+
+        //TODO mv to `mail-codec`
+        Invalide7BitValue( byte: u8 ) {
+            description( "the byte is not valid in 7bit (content transfer) encoding" )
+        }
+
+        //TODO mv to `mail-codec`
+        Invalide8BitValue( val: u8 ) {
+            description( "the byte is not valid in 8bit (content transfer) encoding" )
+        }
+
+        //TODO mv to `mail-codec`
+        Invalide7BitSeq( byte: u8 ) {
+            description( "the byte seq is not valid in 7bit (content transfer) encoding" )
+        }
+
+        //TODO mv to `mail-codec`
+        Invalide8BitSeq( val: u8 ) {
+            description( "the byte seq is not valid in 8bit (content transfer) encoding" )
+        }
+
 //        //mime_error does not impl (std)Error so no chaining possible
 //        ParsingMime( mime_error: ParserError ) {
 //            description( "parsing mime failed" )
 //            display( "parsing mime failed ({:?})", mime_error )
 //        }
+
 //        /// Certain components might not be encodable under some circumstances.
 //        /// E.g. they might have non-ascii values and are not encodable into ascii
 //        ///
@@ -94,92 +181,28 @@ error_chain! {
 //            description( "given information can not be encoded into ascii" )
 //            display( "can not encode the {} component with value {:?}", component, data )
 //        }
-//
-        TriedWriting8BitBytesInto7BitData {
-            description(
-                "the program tried to write a non ascii string while only ascii was supported" )
+
+        //TODO mv to `mail-codec`
+        NotMultipartMime( mime: AnyMediaType ) {
+            description( "expected a multipart mime for a multi part body" )
+            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
         }
-//
-//        AtLastOneElementIsRequired {
-//            description( concat!( "for the operation a list with at last one element",
-//                                  " is required but and empty list was given" ) )
-//        }
-//
-        InvalidHeaderName(name: String) {
-            description( "given header name is not valid" )
-            display( "{:?} is not a valid header name", name )
-        }
-//
-//        NotMultipartMime( mime: AnyMediaType ) {
-//            description( "expected a multipart mime for a multi part body" )
-//            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
-//        }
-//
+
 //        MultipartBoundaryMissing {
 //            description( "multipart boundary is missing" )
 //        }
-//
+
 //        NotSinglepartMime( mime: AnyMediaType ) {
 //            description( "expected a non-multipart mime for a non-multipart body" )
 //            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
 //        }
-//
-        PunyCodeingDomainFailed( errors: PunyCodeErrors ) {
-            description( "using puny code to encode the domain failed" )
-        }
-//
-//
-//        NeedPlainAndOrHtmlMailBody {
-//
-//        }
-//
-//        ContentTypeAndBodyIncompatible {
-//            description( concat!(
-//                "given content type is incompatible with body,",
-//                "e.g. using a non multipart mime with a multipart body" ) )
-//        }
-//
-//        UnknownTransferEncoding( encoding: String ) {
-//            description( "the given transfer encoding is not supported" )
-//            display( "the transfer encoding {:?} is not supported", encoding )
-//        }
-//
-//        Invalide7BitValue( byte: u8 ) {
-//            description( "the byte is not valid in 7bit (content transfer) encoding" )
-//        }
-//        Invalide8BitValue( val: u8 ) {
-//            description( "the byte is not valid in 8bit (content transfer) encoding" )
-//        }
-//
-        InvalidLineBrake {
-            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
-        }
 
-        HardLineLengthLimitBreached {
-            description("the line length is limited to 998 bytes (excluding tailing \r\n)")
-        }
-//
-//
-//        BodyFutureResolvedToAnError {
-//
-//        }
-//
-//        NeedAtLastOneBodyInMultipartMail {
-//
-//        }
-//
-//        GeneratingMimeFailed {
-//
-//        }
-//
-//        RegisterExtensionsToLate( extension: String ) {
-//            description( "can not register extensions after Store/Look-Up-Table was generated" )
+
+//        AtLastOneElementIsRequired {
+//            description( concat!( "for the operation a list with at last one element",
+//                                  " is required but and empty list was given" ) )
 //        }
 
-        MalformedEncodedWord(word: String) {
-            description("the encoded word is not well-formed")
-            display("the encoded word {:?} is not well-formed", word)
 
-        }
     }
 }
