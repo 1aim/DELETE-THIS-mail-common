@@ -710,7 +710,13 @@ impl<'inner> EncodeHandle<'inner> {
 
     fn break_line_on_fws(&mut self) -> bool {
         if self.content_before_fws && self.last_fws_idx > self.line_start_idx {
-            self.buffer.insert_str(self.last_fws_idx, "\r\n ");
+            //INDEX_SAFE: self.content_before_fws is only true if ther is at last one char
+            // if so self.last_ws_idx does not point at the end of the buffer but inside
+            let newline = match self.buffer.as_bytes()[self.last_fws_idx] {
+                b' ' | b'\t' => "\r\n",
+                _ => "\r\n "
+            };
+            self.buffer.insert_str(self.last_fws_idx, newline);
             self.line_start_idx = self.last_fws_idx + 2;
             // no need last_fws can be < line_start but
             //self.last_fws_idx = self.line_start_idx;
@@ -1339,6 +1345,39 @@ mod test {
                     "12345678XX\r\n"
                 ));
         }
+
+        #[test]
+        fn break_line_on_fws_does_not_insert_unessesary_space() {
+            let mut encoder = Encoder::new(MailType::Ascii);
+            {
+                let mut handle = encoder.encode_handle();
+                assert_ok!(handle.write_str(SoftAsciiStr::from_str("A23456789:").unwrap()));
+                handle.mark_fws_pos();
+                assert_ok!(handle.write_str(SoftAsciiStr::from_str(concat!(
+                    "\t20_3456789",
+                    "30_3456789",
+                    "40_3456789",
+                    "50_3456789",
+                    "60_3456789",
+                    "70_3456789",
+                    "12345678XX"
+                )).unwrap()));
+                handle.finish_header();
+            }
+            assert_eq!(encoder.sections.len(), 1);
+            let last = encoder.sections.pop().unwrap().unwrap_header();
+            assert_eq!(&*last, concat!(
+                    "A23456789:\r\n\t",
+                    "20_3456789",
+                    "30_3456789",
+                    "40_3456789",
+                    "50_3456789",
+                    "60_3456789",
+                    "70_3456789",
+                    "12345678XX\r\n"
+                ));
+        }
+
 
         #[test]
         fn to_long_unbreakable_line() {

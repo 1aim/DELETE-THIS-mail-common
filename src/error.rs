@@ -116,7 +116,7 @@ error_chain! {
 //
 //        }
 
-        //TODO mv to `mail-codec`
+        //TODO mv to `mail-codec` && `mail-codec-composition`
         NeedAtLastOneBodyInMultipartMail {
 
         }
