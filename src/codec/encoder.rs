@@ -1,10 +1,12 @@
 use std::any::{Any, TypeId};
 use std::fmt::{self, Debug};
 use std::result::{ Result as StdResult };
+use std::borrow::Cow;
+use std::str;
 
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
-use error::{Result, Error, ErrorKind};
+use error::{Result, Error, ErrorKind, ResultExt};
 use grammar::is_atext;
 use ::MailType;
 
@@ -275,28 +277,47 @@ impl<B: BodyBuffer> Encoder<B> {
         self.sections
     }
 
-    //TODO other "write out" methods (iterator over &[u8]?)
-    pub fn into_string_lossy(self) -> Result<String> {
+    /// # Error
+    ///
+    /// This can fail if a body does not contain valid utf8, or
+    /// if `BodyBuffer::with_slice` fails (e.g. because it refered
+    /// to a shared resoruce which was invalidated)
+    pub fn to_string(&self) -> Result<String> {
+        self._to_string(|slice| match str::from_utf8(slice) {
+            Ok(val) => Ok(Cow::Borrowed(val)),
+            Err(e) => Err(Error::with_chain(e, ErrorKind::NonUtf8Body))
+        })
+    }
+
+    /// # Error
+    ///
+    /// This can fail if a call to `BodyBuffer::with_slice` fails
+    /// (e.g. because it refered to a shared resoruce which was invalidated)
+    ///
+    pub fn to_string_lossy(&self) -> Result<String> {
+        self._to_string(|slice| Ok(String::from_utf8_lossy(slice)))
+    }
+
+    fn _to_string<F>(&self, mut bodyslice2string: F) -> Result<String>
+        where F: FnMut(&[u8]) -> Result<Cow<str>>
+    {
         let mut out = String::new();
-        for section in self.sections.into_iter() {
-            match section {
-                Section::String(string) => {
-                    out.push_str(&*string)
-                },
-                Section::BodyPayload(body) => {
-                    body.with_slice(|slice| {
-                        let string = String::from_utf8_lossy(slice);
-                        out.push_str(&*string);
-                        if !string.ends_with("\r\n") {
-                            out.push_str("\r\n");
-                        }
-                        Ok(())
-                    })?;
-                }
+        for section in self.sections.iter() {
+            match *section {
+                Section::String(ref string) => { out.push_str(&*string); }
+                Section::BodyPayload(ref body) => body.with_slice(|slice| {
+                    let text = bodyslice2string(slice)?;
+                    out.push_str(&*text);
+                    if !text.ends_with("\r\n") {
+                        out.push_str("\r\n");
+                    }
+                    Ok(())
+                })?
             }
         }
         Ok(out)
     }
+
 }
 
 

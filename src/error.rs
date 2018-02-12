@@ -1,6 +1,7 @@
 use std::io;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
+use std::str::Utf8Error;
 
 use base64;
 use quoted_printable;
@@ -105,6 +106,9 @@ error_chain! {
 
         }
 
+        NonUtf8Body {
+            description("can not convert body to string as it contains non utf8 chars")
+        }
         //------------------------------------- DEPRECATED --------------------------------//
 
 //        PathToFileWithoutFileName(path: PathBuf) {
