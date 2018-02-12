@@ -1,30 +1,10 @@
 use std::io;
-use std::fmt::{self, Display};
 
 use base64;
 use quoted_printable;
 use idna::uts46::{ Errors as PunyCodeErrors };
 use mime::AnyMediaType;
 use ::MailType;
-
-#[derive(Debug)]
-pub struct MultipleErrorsWraper {
-    pub errors: Vec<Error>
-}
-
-impl From<Vec<Error>> for MultipleErrorsWraper {
-    fn from(errors: Vec<Error>) -> MultipleErrorsWraper {
-        MultipleErrorsWraper { errors }
-    }
-}
-
-impl Display for MultipleErrorsWraper {
-    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
-        fter.debug_list()
-            .entries(&self.errors)
-            .finish()
-    }
-}
 
 // we do not wan't dependencies to have to import error_chain
 // just to have some of the additional error chaining functions
@@ -63,11 +43,6 @@ error_chain! {
 
         HeaderComponentEncodingFailure {
             description("encoding header component failed")
-        }
-
-        MultipleErrors(errors: MultipleErrorsWraper) {
-            description("multiple errors happened in the same operation")
-            display("multiple errors: {}", errors)
         }
 
         /// adding a header to the header map failed

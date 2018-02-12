@@ -269,33 +269,26 @@ impl HeaderMap {
             })
     }
 
+    //TODO also "somehow" return the headers of other
     /// # Error
     ///
-    /// Returns a MultipleErrors error containing all errors for
-    /// each header which in `other` which could not be added to
-    /// `self`. Note that if an error does occure it is assured that
-    /// any header added to `self` during this call to `extend` is
-    /// removed again before `extend` returns.
-    ///
-    pub fn extend( &mut self, other: HeaderMap )
-        -> Result<&mut Self>
+    /// If a header from `other` can not be added
+    /// an error is returned. All elements
+    /// already added to `self` during the function
+    /// call are removed before the function returns.
+    pub fn try_extend(&mut self, other: HeaderMap )
+                      -> Result<&mut Self>
     {
         let prev_len = self.len();
-        let res = self.inner_map.extend(other.into_iter_with_meta());
+        let res = self.inner_map.try_extend(other.into_iter_with_meta());
+
         match res {
             Ok(()) => Ok(self),
-            Err(errs) => {
-                //combine errors
-                let errs = errs.into_iter().map(|(hn, _comp, _meta, error)| {
-                    error.chain_err(||ErrorKind::FailedToAddHeader(hn.as_str()))
-                }).collect::<Vec<_>>();
-                let error = ErrorKind::MultipleErrors(errs.into());
-
-                //TODO use trunctat
+            Err(((name, _, _, error), _iter)) => {
                 while self.len() > prev_len {
-                    let _ = self.inner_map.pop();
+                    self.inner_map.pop().unwrap();
                 }
-                Err(error.into())
+                Err(error.chain_err(||ErrorKind::FailedToAddHeader(name.as_str())))
             }
         }
     }
@@ -620,7 +613,7 @@ mod test {
             XComment: "ab@c"
         }.unwrap();
 
-        headers.extend( headers! {
+        headers.try_extend( headers! {
             Subject: "hy there",
             Comments: "magic+spell"
         }.unwrap() ).unwrap();
