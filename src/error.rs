@@ -1,13 +1,10 @@
 use std::io;
 use std::fmt::{self, Display};
-use std::path::PathBuf;
-use std::str::Utf8Error;
 
 use base64;
 use quoted_printable;
 use idna::uts46::{ Errors as PunyCodeErrors };
 use mime::AnyMediaType;
-use mime::error::{Error as ParserError};
 use ::MailType;
 
 #[derive(Debug)]
@@ -44,12 +41,10 @@ error_chain! {
 
     errors {
 
-        RejectedHeaderNameSchema(name: String) {
-            description("the case of header names is restricted to the schema used in RFC 5322")
-        }
-
         HeaderTypeMixup {
-            description("multipel header types with the same name, which differ in qunatity or validator")
+            description(concat!(
+                "multiple header types with the same name, which differ in quantity or validator"
+            ))
         }
 
         InvalidInput(for_usage_in: &'static str, input: String, mail_type: MailType) {
@@ -58,6 +53,10 @@ error_chain! {
                 for_usage_in, input, mail_type)
         }
 
+        /// the contextual validation of the header using the headers validator failed
+        ///
+        /// This can e.g. happen if the header contains a multi-mailbox resent-from, but
+        /// no resent-sender header.
         HeaderValidationFailure {
             description("validation of header in HeaderMap failed")
         }
@@ -71,28 +70,13 @@ error_chain! {
             display("multiple errors: {}", errors)
         }
 
+        /// adding a header to the header map failed
+        ///
+        /// use `.cause()` to gain more information about why/how it did
+        /// fail.
         FailedToAddHeader(name: &'static str) {
             description("failed to add a header filed to the header map")
-            display("failed to a the field {:?} to the header map", name)
-        }
-
-
-        TriedWriting8BitBytesInto7BitData {
-            description(
-                "the program tried to write a non ascii string while only ascii was supported" )
-        }
-
-        InvalidHeaderName(name: String) {
-            description( "given header name is not valid" )
-            display( "{:?} is not a valid header name", name )
-        }
-
-        PunyCodeingDomainFailed( errors: PunyCodeErrors ) {
-            description( "using puny code to encode the domain failed" )
-        }
-
-        InvalidLineBrake {
-            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
+            display("failed to add the field {:?} to the header map", name)
         }
 
         HardLineLengthLimitBreached {
@@ -106,19 +90,29 @@ error_chain! {
 
         }
 
+        PunyCodeingDomainFailed( errors: PunyCodeErrors ) {
+            description( "using puny code to encode the domain failed" )
+        }
+
+        InvalidLineBrake {
+            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
+        }
+
         NonUtf8Body {
             description("can not convert body to string as it contains non utf8 chars")
         }
+
+        Utf8InHeaderRequiresInternationalizedMail {
+            description("to use utf-8 in a header a internationalized mail is needed")
+        }
+
+        InvalidHeaderName(name: String) {
+            description( "given header name is not valid" )
+            display( "{:?} is not a valid header name", name )
+        }
+
         //------------------------------------- DEPRECATED --------------------------------//
 
-//        PathToFileWithoutFileName(path: PathBuf) {
-//            description("malformed path for loading a file")
-//            display("malformed path for loading a file: {:?}", path)
-//        }
-
-//        BodyFutureResolvedToAnError {
-//
-//        }
 
         //TODO mv to `mail-codec` && `mail-codec-composition`
         NeedAtLastOneBodyInMultipartMail {
@@ -130,13 +124,6 @@ error_chain! {
 
         }
 
-//        RegisterExtensionsToLate( extension: String ) {
-//            description( "can not register extensions after Store/Look-Up-Table was generated" )
-//        }
-
-//        NeedPlainAndOrHtmlMailBody {
-//
-//        }
 
         //TODO mv to `mail-codec`
         ContentTypeAndBodyIncompatible {
@@ -145,10 +132,6 @@ error_chain! {
                 "e.g. using a non multipart mime with a multipart body" ) )
         }
 
-//        UnknownTransferEncoding( encoding: String ) {
-//            description( "the given transfer encoding is not supported" )
-//            display( "the transfer encoding {:?} is not supported", encoding )
-//        }
 
         //TODO mv to `mail-codec`
         Invalide7BitValue( byte: u8 ) {
@@ -170,43 +153,11 @@ error_chain! {
             description( "the byte seq is not valid in 8bit (content transfer) encoding" )
         }
 
-//        //mime_error does not impl (std)Error so no chaining possible
-//        ParsingMime( mime_error: ParserError ) {
-//            description( "parsing mime failed" )
-//            display( "parsing mime failed ({:?})", mime_error )
-//        }
-
-//        /// Certain components might not be encodable under some circumstances.
-//        /// E.g. they might have non-ascii values and are not encodable into ascii
-//        ///
-//        /// a example for this would be a non ascii `local-part` of `addr-spec`
-//        /// (i.e. the part of a email address befor the `@`)
-//        NonEncodableComponents( component: &'static str, data: String ) {
-//            description( "given information can not be encoded into ascii" )
-//            display( "can not encode the {} component with value {:?}", component, data )
-//        }
-
         //TODO mv to `mail-codec`
         NotMultipartMime( mime: AnyMediaType ) {
             description( "expected a multipart mime for a multi part body" )
             display( _self ) -> ( "{}, got: {}", _self.description(), mime )
         }
-
-//        MultipartBoundaryMissing {
-//            description( "multipart boundary is missing" )
-//        }
-
-//        NotSinglepartMime( mime: AnyMediaType ) {
-//            description( "expected a non-multipart mime for a non-multipart body" )
-//            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
-//        }
-
-
-//        AtLastOneElementIsRequired {
-//            description( concat!( "for the operation a list with at last one element",
-//                                  " is required but and empty list was given" ) )
-//        }
-
 
     }
 }

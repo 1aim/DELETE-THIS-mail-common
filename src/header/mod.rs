@@ -3,7 +3,7 @@ use std::fmt;
 use soft_ascii_string::SoftAsciiStr;
 
 use error::Result;
-use error::ErrorKind::{InvalidHeaderName, RejectedHeaderNameSchema};
+use error::ErrorKind::InvalidHeaderName;
 use grammar::is_ftext;
 
 
@@ -148,14 +148,14 @@ impl HeaderName {
             match ch {
                 'a'...'z' => {
                     if begin_of_word {
-                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
+                        bail!(InvalidHeaderName(name.as_str().to_owned()))
                     }
                 },
                 'A'...'Z' => {
                     if begin_of_word {
                         begin_of_word = false;
                     } else {
-                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
+                        bail!(InvalidHeaderName(name.as_str().to_owned()))
                     }
                 },
                 '0'...'9' => {
@@ -163,7 +163,7 @@ impl HeaderName {
                 },
                 ch => {
                     if ch < '!' || ch > '~' || ch == ':' {
-                        bail!(RejectedHeaderNameSchema(name.as_str().to_owned()))
+                        bail!(InvalidHeaderName(name.as_str().to_owned()))
                     }
                     begin_of_word = true;
                 }

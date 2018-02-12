@@ -6,7 +6,7 @@ use std::str;
 
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
-use error::{Result, Error, ErrorKind, ResultExt};
+use error::{Result, Error, ErrorKind};
 use grammar::is_atext;
 use ::MailType;
 
@@ -529,7 +529,7 @@ impl<'inner> EncodeHandle<'inner> {
             { self.trace.push(TraceToken::NowUtf8) }
             self.internal_write_str(s).into()
         } else {
-            bail!(ErrorKind::TriedWriting8BitBytesInto7BitData)
+            bail!(ErrorKind::Utf8InHeaderRequiresInternationalizedMail)
         }
     }
 

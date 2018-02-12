@@ -271,7 +271,7 @@ impl HeaderMap {
 
     /// # Error
     ///
-    /// Returns a MultopleErrors error containing all errors for
+    /// Returns a MultipleErrors error containing all errors for
     /// each header which in `other` which could not be added to
     /// `self`. Note that if an error does occure it is assured that
     /// any header added to `self` during this call to `extend` is
@@ -291,6 +291,7 @@ impl HeaderMap {
                 }).collect::<Vec<_>>();
                 let error = ErrorKind::MultipleErrors(errs.into());
 
+                //TODO use trunctat
                 while self.len() > prev_len {
                     let _ = self.inner_map.pop();
                 }
