@@ -277,6 +277,29 @@ impl<B: BodyBuffer> Encoder<B> {
         self.sections
     }
 
+
+    /// # Error
+    ///
+    /// This can fail if a call to `BodyBuffer::with_slice` fails
+    /// (e.g. because it refered to a shared resoruce which was invalidated)
+    ///
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        let mut out = Vec::new();
+        for section in self.sections.iter() {
+            match *section {
+                Section::String(ref string) => out.extend(string.bytes()),
+                Section::BodyPayload(ref body) => body.with_slice(|slice| {
+                    out.extend(slice);
+                    if !slice.ends_with(b"\r\n") {
+                        out.extend(b"\r\n")
+                    }
+                    Ok(())
+                })?
+            }
+        }
+        Ok(out)
+    }
+
     /// # Error
     ///
     /// This can fail if a body does not contain valid utf8, or
@@ -1183,6 +1206,20 @@ mod test {
             assert_eq!(res, expected);
         }
 
+        #[test]
+        fn to_vec() {
+            let mut encoder = Encoder::new(MailType::Ascii);
+            {
+                let mut handle = encoder.encode_handle();
+                handle.write_str_unchecked("A: B").unwrap();
+                handle.finish_header();
+            }
+            let body1 = VecBody::new(4);
+            encoder.add_body(body1.clone());
+
+            let data = encoder.to_vec().unwrap();
+            assert_eq!(data, b"A: B\r\n\x00\x01\x02\x03\r\n");
+        }
     }
 
 
