@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::borrow::ToOwned;
 
 use soft_ascii_string::{SoftAsciiString, SoftAsciiStr};
@@ -15,7 +15,7 @@ use serde;
 pub enum InnerAscii {
     Owned(SoftAsciiString),
     //by using String+SoftAsciiStr we can eliminate unessesary copies
-    Shared(OwningRef<Rc<String>, SoftAsciiStr>)
+    Shared(OwningRef<Arc<String>, SoftAsciiStr>)
 }
 
 impl InnerAscii {
@@ -35,7 +35,7 @@ impl InnerAscii {
     pub fn into_shared(self) -> Self {
         match self {
             InnerAscii::Owned(value) => {
-                let buffer: Rc<String> = Rc::new(value.into());
+                let buffer: Arc<String> = Arc::new(value.into());
                 let orf = OwningRef::new(buffer).map(|data: &String| {
                     // we got it from a SoftAsciiString so no check here
                     SoftAsciiStr::from_str_unchecked(&**data)
@@ -54,7 +54,7 @@ impl InnerAscii {
 pub enum InnerUtf8 {
     Owned(String),
     //by using String+SoftAsciiStr we can eliminate unessesary copies
-    Shared(OwningRef<Rc<String>, str>)
+    Shared(OwningRef<Arc<String>, str>)
 }
 
 impl InnerUtf8 {
@@ -67,7 +67,7 @@ impl InnerUtf8 {
     pub fn into_shared(self) -> Self {
         match self {
             InnerUtf8::Owned(value) => {
-                let buffer = Rc::new(value);
+                let buffer = Arc::new(value);
                 let orf = OwningRef::new(buffer)
                     .map(|rced| &**rced);
                 InnerUtf8::Shared(orf)
@@ -171,7 +171,7 @@ mod test {
     fn inner_ascii_item_eq() {
         let a = InnerAscii::Owned( SoftAsciiString::from_string( "same" ).unwrap() );
         let b = InnerAscii::Shared(
-            OwningRef::new(Rc::new("same".to_owned()))
+            OwningRef::new(Arc::new("same".to_owned()))
                 .map(|v| SoftAsciiStr::from_str_unchecked(&**v))
         );
         assert_eq!( a, b );
@@ -181,7 +181,7 @@ mod test {
     fn inner_ascii_item_neq() {
         let a = InnerAscii::Owned( SoftAsciiString::from_string( "same" ).unwrap() );
         let b = InnerAscii::Shared(
-            OwningRef::new(Rc::new("not same".to_owned()))
+            OwningRef::new(Arc::new("not same".to_owned()))
                 .map(|v| SoftAsciiStr::from_str_unchecked(&**v))
         );
         assert_ne!( a, b );
@@ -192,7 +192,7 @@ mod test {
         let a = InnerUtf8::Owned( String::from( "same" ) );
         let b = InnerUtf8::Shared(
             OwningRef::new(
-                Rc::new( String::from( "same" ) ) )
+                Arc::new( String::from( "same" ) ) )
                 .map(|v| &**v)
         );
         assert_eq!( a, b );
@@ -203,7 +203,7 @@ mod test {
         let a = InnerUtf8::Owned( String::from( "same" ) );
         let b = InnerUtf8::Shared(
             OwningRef::new(
-                Rc::new( String::from( "not same" ) ) )
+                Arc::new( String::from( "not same" ) ) )
                 .map(|v| &**v)
         );
         assert_ne!( a, b );

@@ -94,7 +94,7 @@ deref0!( +mut Input => InnerUtf8 );
 
 #[cfg(test)]
 mod test {
-    use std::rc::Rc;
+    use std::sync::Arc;
     use owning_ref::OwningRef;
 
     use super::*;
@@ -104,7 +104,7 @@ mod test {
         let a = Input( InnerUtf8::Owned( "same".into() ) );
         let b = Input( InnerUtf8::Shared(
             OwningRef::new(
-                Rc::new( String::from( "same" ) ) )
+                Arc::new( String::from( "same" ) ) )
                 .map(|v| &**v)
         ) );
         assert_eq!( a, b );
@@ -115,7 +115,7 @@ mod test {
         let a = Input( InnerUtf8::Owned( "not same".into() ) );
         let b = Input( InnerUtf8::Shared(
             OwningRef::new(
-                Rc::new( String::from( "not at all same" ) ) )
+                Arc::new( String::from( "not at all same" ) ) )
                 .map(|v| &**v)
         ) );
         assert_ne!( a, b );
