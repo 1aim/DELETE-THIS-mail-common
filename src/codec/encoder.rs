@@ -23,7 +23,7 @@ const LINE_LEN_HARD_LIMIT: usize = 998;
 ///
 /// This trait can be turned into a trait object allowing runtime
 /// genericallity over the "components" if needed.
-pub trait EncodableInHeader: Send + Any + Debug {
+pub trait EncodableInHeader: Send + Sync + Any + Debug {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()>;
 
     #[doc(hidden)]
@@ -96,8 +96,8 @@ impl EncodableInHeaderBoxExt for Box<EncodableInHeader+Send> {
 /// as it is a replacement for a not so well working
 /// `impl<FN> EncodableInHeader for FN where FN: ...`
 pub struct EncodableClosure<F>(pub F);
-impl<FN: 'static> EncodableInHeader for EncodableClosure<FN>
-    where FN: Send + for<'a,'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
+impl<FN: 'static + Send + Sync> EncodableInHeader for EncodableClosure<FN>
+    where FN: for<'a,'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
 {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
         (self.0)(encoder)
