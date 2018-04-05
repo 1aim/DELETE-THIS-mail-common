@@ -3,6 +3,7 @@ use std::fmt::{self, Debug};
 use std::result::{ Result as StdResult };
 use std::borrow::Cow;
 use std::str;
+use std::sync::Arc;
 
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
@@ -105,7 +106,7 @@ macro_rules! enc_func {
             $block
         }
         let fn_pointer = _anonym as fn(&mut EncodeHandle) -> $crate::error::Result<()>;
-        $crate::codec::encoder::EncodeFn(fn_pointer)
+        $crate::codec::EncodeFn::new(fn_pointer)
     });
 }
 
@@ -113,6 +114,12 @@ type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodeHandle<'b>) -> Result<()>;
 
 #[derive(Clone, Copy)]
 pub struct EncodeFn(_EncodeFn);
+
+impl EncodeFn {
+    pub fn new(func: _EncodeFn) -> Self {
+        EncodeFn(func)
+    }
+}
 
 impl EncodableInHeader for EncodeFn {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
@@ -127,6 +134,53 @@ impl EncodableInHeader for EncodeFn {
 impl Debug for EncodeFn {
     fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
         write!(fter, "EncodeFn(..)")
+    }
+}
+
+#[macro_export]
+macro_rules! enc_closure {
+    ($($t:tt)*) => ({
+        $crate::codec::EncodeClosure::new($($t)*)
+    });
+}
+
+pub struct EncodeClosure<FN: 'static>(Arc<FN>)
+    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>;
+
+impl<FN: 'static> EncodeClosure<FN>
+    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
+{
+    pub fn new(closure: FN) -> Self {
+        EncodeClosure(Arc::new(closure))
+    }
+}
+
+impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
+    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
+{
+    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
+        (self.0)(encoder)
+    }
+
+    fn boxed_clone(&self) -> Box<EncodableInHeader> {
+        Box::new(self.clone())
+    }
+}
+
+impl<FN: 'static> Clone for EncodeClosure<FN>
+    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
+{
+    fn clone(&self) -> Self {
+        EncodeClosure(self.0.clone())
+    }
+}
+
+
+impl<FN: 'static> Debug for EncodeClosure<FN>
+    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
+{
+    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
+        write!(fter, "EncodeClosure(..)")
     }
 }
 
@@ -1927,6 +1981,19 @@ mod test {
             use super::EncodeHandle;
             enc_func!(|x: &mut EncodeHandle| {
                 x.write_utf8("hy")
+            })
+        } => Utf8 => [
+            Text "hy"
+        ]
+    }
+
+    ec_test! {
+        does_ec_test_work_eith_encode_closure,
+        {
+            use super::EncodeHandle;
+            let think = "hy";
+            enc_closure!(move |x: &mut EncodeHandle| {
+                x.write_utf8(think)
             })
         } => Utf8 => [
             Text "hy"
