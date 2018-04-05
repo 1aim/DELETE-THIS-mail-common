@@ -105,7 +105,7 @@ impl Meta for HeaderMeta {
 /// one which accepts a type hint (a normally zero sized struct implementing
 /// Header) and on which just accepts the type and needs to be called with
 /// the turbofish operator. The later one is prefixed by a `_` as the former
-/// one is more nice to use, but in some siturations, e.g. when wrapping
+/// one is more nice to use, but in some situations, e.g. when wrapping
 /// `HeaderMap` in custom code the only type accepting variations are more
 /// usefull.
 ///
@@ -115,6 +115,7 @@ impl Meta for HeaderMeta {
 /// let _ = map._get::<Subject>();
 /// ```
 ///
+#[derive(Clone)]
 pub struct HeaderMap {
     inner_map: TotalOrderMultiMap<HeaderName, Box<EncodableInHeader>, HeaderMeta>,
 }
@@ -449,6 +450,10 @@ mod test {
     impl EncodableInHeader for OtherComponent {
         fn encode(&self, _encoder:  &mut EncodeHandle) -> Result<()> {
             bail!("encoding is not implemented")
+        }
+
+        fn box_clone(&self) -> Box<EncodableInHeader> {
+            Box::new(self.clone())
         }
     }
 

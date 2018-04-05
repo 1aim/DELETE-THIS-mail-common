@@ -26,6 +26,8 @@ const LINE_LEN_HARD_LIMIT: usize = 998;
 pub trait EncodableInHeader: Send + Sync + Any + Debug {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()>;
 
+    fn box_clone(&self) -> Box<EncodableInHeader>;
+
     #[doc(hidden)]
     fn type_id( &self ) -> TypeId {
         TypeId::of::<Self>()
@@ -60,6 +62,13 @@ impl EncodableInHeader {
     }
 }
 
+impl Clone for Box<EncodableInHeader> {
+
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
+}
+
 
 pub trait EncodableInHeaderBoxExt: Sized {
     fn downcast<T: EncodableInHeader>(self) -> StdResult<Box<T>, Self>;
@@ -89,28 +98,37 @@ impl EncodableInHeaderBoxExt for Box<EncodableInHeader+Send> {
     }
 }
 
-/// Wrapper Struct to be able to use EncodableInHeader with Closures
-///
-/// Basically a workaround for Closures not implementing debug in all
-/// circumstances and therefore ok to be placed in the `traits` module
-/// as it is a replacement for a not so well working
-/// `impl<FN> EncodableInHeader for FN where FN: ...`
-pub struct EncodableClosure<F>(pub F);
-impl<FN: 'static + Send + Sync> EncodableInHeader for EncodableClosure<FN>
-    where FN: for<'a,'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
-{
+#[macro_export]
+macro_rules! enc_func {
+    (|$enc:ident : &mut EncodeHandle| $block:block) => ({
+        fn _anonym($enc: &mut EncodeHandle) -> $crate::error::Result<()> {
+            $block
+        }
+        let fn_pointer = _anonym as fn(&mut EncodeHandle) -> $crate::error::Result<()>;
+        $crate::codec::encoder::EncodeFn(fn_pointer)
+    });
+}
+
+type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodeHandle<'b>) -> Result<()>;
+
+#[derive(Clone, Copy)]
+pub struct EncodeFn(_EncodeFn);
+
+impl EncodableInHeader for EncodeFn {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
         (self.0)(encoder)
     }
-}
 
-impl<FN> Debug for EncodableClosure<FN> {
-
-    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
-        write!(fter, "EncodableClosure(..)")
+    fn box_clone(&self) -> Box<EncodableInHeader> {
+        Box::new(*self)
     }
 }
 
+impl Debug for EncodeFn {
+    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
+        write!(fter, "EncodeFn(..)")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Section<R: BodyBuffer> {
@@ -1031,7 +1049,6 @@ mod test {
     use super::{
         BodyBuffer,
         Section,
-        EncodableClosure
     };
 
     type _Encoder = super::Encoder<VecBody>;
@@ -1151,9 +1168,8 @@ mod test {
 
         #[test]
         fn is_implemented_for_closures() {
-            let text = "hy ho";
-            let closure = EncodableClosure(move |handle: &mut EncodeHandle| {
-                handle.write_utf8(text)
+            let closure = enc_func!(|handle: &mut EncodeHandle| {
+                handle.write_utf8("hy ho")
             });
 
             let mut encoder = Encoder::<VecBody>::new(MailType::Internationalized);
@@ -1909,7 +1925,7 @@ mod test {
         does_ec_test_work,
         {
             use super::EncodeHandle;
-            EncodableClosure(|x: &mut EncodeHandle| {
+            enc_func!(|x: &mut EncodeHandle| {
                 x.write_utf8("hy")
             })
         } => Utf8 => [
@@ -1923,7 +1939,7 @@ mod test {
             use super::EncodeHandle;
             // this is just a type system test, if it compiles it can bail
             if false { bail!("if false..."); }
-            EncodableClosure(|x: &mut EncodeHandle| {
+            enc_func!(|x: &mut EncodeHandle| {
                 x.write_utf8("hy")
             })
         } => Utf8 => [
@@ -1934,21 +1950,29 @@ mod test {
     mod trait_object {
         use super::super::*;
 
-        #[derive(Default, PartialEq, Debug)]
+        #[derive(Default, Clone, PartialEq, Debug)]
         struct TestType(&'static str);
 
         impl EncodableInHeader for TestType {
             fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
                 encoder.write_utf8(self.0)
             }
+
+            fn box_clone(&self) -> Box<EncodableInHeader> {
+                Box::new(self.clone())
+            }
         }
 
-        #[derive(Default, PartialEq, Debug)]
+        #[derive(Default, Clone, PartialEq, Debug)]
         struct AnotherType(&'static str);
 
         impl EncodableInHeader for AnotherType {
             fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
                 encoder.write_utf8(self.0)
+            }
+
+            fn box_clone(&self) -> Box<EncodableInHeader> {
+                Box::new(self.clone())
             }
         }
 

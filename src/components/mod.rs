@@ -75,6 +75,10 @@ impl EncodableInHeader for RawUnstructured {
             handle.write_str(SoftAsciiStr::from_str_unchecked(self.text.as_str()))
         }
     }
+
+    fn box_clone(&self) -> Box<EncodableInHeader> {
+        Box::new(self.clone())
+    }
 }
 
 
