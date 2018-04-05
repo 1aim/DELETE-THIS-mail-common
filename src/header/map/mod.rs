@@ -452,7 +452,7 @@ mod test {
             bail!("encoding is not implemented")
         }
 
-        fn box_clone(&self) -> Box<EncodableInHeader> {
+        fn boxed_clone(&self) -> Box<EncodableInHeader> {
             Box::new(self.clone())
         }
     }

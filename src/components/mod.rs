@@ -76,7 +76,7 @@ impl EncodableInHeader for RawUnstructured {
         }
     }
 
-    fn box_clone(&self) -> Box<EncodableInHeader> {
+    fn boxed_clone(&self) -> Box<EncodableInHeader> {
         Box::new(self.clone())
     }
 }

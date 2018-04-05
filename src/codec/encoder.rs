@@ -26,7 +26,7 @@ const LINE_LEN_HARD_LIMIT: usize = 998;
 pub trait EncodableInHeader: Send + Sync + Any + Debug {
     fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()>;
 
-    fn box_clone(&self) -> Box<EncodableInHeader>;
+    fn boxed_clone(&self) -> Box<EncodableInHeader>;
 
     #[doc(hidden)]
     fn type_id( &self ) -> TypeId {
@@ -65,7 +65,7 @@ impl EncodableInHeader {
 impl Clone for Box<EncodableInHeader> {
 
     fn clone(&self) -> Self {
-        self.box_clone()
+        self.boxed_clone()
     }
 }
 
@@ -119,7 +119,7 @@ impl EncodableInHeader for EncodeFn {
         (self.0)(encoder)
     }
 
-    fn box_clone(&self) -> Box<EncodableInHeader> {
+    fn boxed_clone(&self) -> Box<EncodableInHeader> {
         Box::new(*self)
     }
 }
@@ -1958,7 +1958,7 @@ mod test {
                 encoder.write_utf8(self.0)
             }
 
-            fn box_clone(&self) -> Box<EncodableInHeader> {
+            fn boxed_clone(&self) -> Box<EncodableInHeader> {
                 Box::new(self.clone())
             }
         }
@@ -1971,7 +1971,7 @@ mod test {
                 encoder.write_utf8(self.0)
             }
 
-            fn box_clone(&self) -> Box<EncodableInHeader> {
+            fn boxed_clone(&self) -> Box<EncodableInHeader> {
                 Box::new(self.clone())
             }
         }
