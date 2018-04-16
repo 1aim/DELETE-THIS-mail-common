@@ -1,8 +1,51 @@
 use soft_ascii_string::{ SoftAsciiStr, SoftAsciiChar };
 
-use error::Result;
+use super::{base64, quoted_printable};
 
-use super::EncodedWordEncoding;
+mod impls;
+pub use self::impls::*;
+
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum EncodedWordEncoding {
+    Base64, QuotedPrintable
+}
+
+impl EncodedWordEncoding {
+
+    /// returns the acronym for the given encoding
+    /// used in a encoded word
+    pub fn acronym(&self) -> &'static SoftAsciiStr {
+        use self::EncodedWordEncoding::*;
+        match *self {
+            Base64 => SoftAsciiStr::from_str_unchecked("B"),
+            QuotedPrintable => SoftAsciiStr::from_str_unchecked("Q")
+        }
+    }
+
+    /// encodes a given utf8 string
+    ///
+    /// either `self::quoted_printable::encoded_word_encode`
+    /// or `self::base64::encoded_word_encode_utf8` is used
+    /// depending on which value `self` is.
+    ///
+    /// As both algorithm need to know about code point boundaries
+    /// only encoding utf8 is supported for now
+    ///
+    pub fn encode<R, O>(&self, input: R, out: &mut O)
+        where R: AsRef<str>, O: EncodedWordWriter
+    {
+        use self::EncodedWordEncoding::*;
+        let input: &str = input.as_ref();
+        match *self {
+            Base64 => {
+                base64::encoded_word_encode(input, out)
+            },
+            QuotedPrintable => {
+                quoted_printable::encoded_word_encode_utf8(input, out)
+            }
+        }
+    }
+}
 
 pub trait EncodedWordWriter {
     fn write_char( &mut self, ch: SoftAsciiChar );
@@ -46,30 +89,4 @@ pub trait EncodedWordWriter {
             self.write_char(ch)
         }
     }
-}
-
-
-/// Trait Repesenting the buffer of a mime body payload
-///
-/// (e.g. a transfer encoded image or text)
-///
-/// Note that the `BodyBuffer` trait is mainly used to break a
-/// cyclic dependency between `codec` and `mail::resource`.
-/// So while all code in lower layers is generic over _one_
-/// kind of BodyBuffer for all Buffers the higher layers
-/// in `mail` and `mail_composition` are fixed on `Resource`.
-///
-pub trait BodyBuffer {
-
-    /// Called to access the bytes in the buffer.
-    ///
-    /// By limiting the access to a closure passed in
-    /// it enables a number of properties for implementators:
-    /// - the byte slice has only to be valid for the duration of the closure,
-    ///   allowing implementations for data behind a Lock which has to keep
-    ///   a Guard alive during the access of the data
-    /// - the implementor can directly return a error if for some
-    ///   reason no data is available or the data was "somehow" corrupted
-    fn with_slice<FN, R>(&self, func: FN) -> Result<R>
-        where FN: FnOnce(&[u8]) -> Result<R>;
 }

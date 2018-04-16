@@ -2,9 +2,8 @@ use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar, SoftAsciiStr };
 
 use vec1::Vec1;
 use grammar::encoded_word::{ MAX_ECW_LEN, ECW_SEP_OVERHEAD };
-use super::{ EncodedWordEncoding as Encoding };
-use super::encoder::EncodeHandle;
-use super::traits::EncodedWordWriter;
+use ::encoder::EncodeHandle;
+use super::{ EncodedWordWriter, EncodedWordEncoding as Encoding };
 
 pub struct VecWriter<'a> {
     data: Vec1<SoftAsciiString >,

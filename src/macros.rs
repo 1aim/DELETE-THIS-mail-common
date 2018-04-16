@@ -41,21 +41,21 @@ macro_rules! assert_err {
 
 
 
-macro_rules! deref0 {
-    (+mut $name:ident => $tp:ty) => (
-        deref0!{-mut $name => $tp }
-        impl ::std::ops::DerefMut for $name {
-            fn deref_mut( &mut self ) -> &mut Self::Target {
-                &mut self.0
-            }
-        }
-    );
-    (-mut $name:ident => $tp:ty) => (
-        impl ::std::ops::Deref for $name {
-            type Target = $tp;
-            fn deref( &self ) -> &Self::Target {
-                &self.0
-            }
-        }
-    );
-}
+// macro_rules! deref0 {
+//     (+mut $name:ident => $tp:ty) => (
+//         deref0!{-mut $name => $tp }
+//         impl ::std::ops::DerefMut for $name {
+//             fn deref_mut( &mut self ) -> &mut Self::Target {
+//                 &mut self.0
+//             }
+//         }
+//     );
+//     (-mut $name:ident => $tp:ty) => (
+//         impl ::std::ops::Deref for $name {
+//             type Target = $tp;
+//             fn deref( &self ) -> &Self::Target {
+//                 &self.0
+//             }
+//         }
+//     );
+// }

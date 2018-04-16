@@ -202,7 +202,8 @@ pub fn is_token(s: &str) -> bool {
 /// based on RFC 2047
 pub mod encoded_word {
     use nom;
-    use error::{Result, ErrorKind};
+    use ::MailType;
+    use ::error::{EncodingError, EncodingErrorKind};
     use super::{  is_especial, is_ascii_vchar };
 
     pub const MAX_ECW_LEN: usize = 75;
@@ -229,12 +230,15 @@ pub mod encoded_word {
     }
 
 
-    pub fn is_encoded_word( word: &str, ctx: EncodedWordContext ) -> bool {
-        try_parse_encoded_word_parts( word, ctx ).is_ok()
+    pub fn is_encoded_word(word: &str, ctx: EncodedWordContext, mail_type: MailType) -> bool {
+        try_parse_encoded_word_parts(word, ctx, mail_type).is_ok()
     }
 
-    pub fn try_parse_encoded_word_parts( word: &str, ctx: EncodedWordContext )
-                                         -> Result<(&str, &str, &str)>
+    pub fn try_parse_encoded_word_parts(
+        word: &str,
+        ctx: EncodedWordContext,
+        mail_type: MailType
+    ) -> Result<(&str, &str, &str), EncodingError>
     {
         //FIXME[BUG] why is the char validator not used
         let char_validator = ctx.char_validator();
@@ -260,10 +264,16 @@ pub mod encoded_word {
                 assert_eq!(rest.len(), 0, "[BUG] used nom::eof!() but rest.len() > 0");
                 Ok( result )
             },
-            nom::IResult::Incomplete( .. ) =>
-                bail!(ErrorKind::MalformedEncodedWord(word.to_owned())),
-            nom::IResult::Error( .. ) =>
-                bail!(ErrorKind::MalformedEncodedWord(word.to_owned()))
+            nom::IResult::Incomplete( .. ) => {
+                return Err((EncodingErrorKind::Malformed {
+                    malformkind: "encoded word does not close"
+                }, mail_type).into());
+            }
+            nom::IResult::Error( .. ) => {
+                return Err((EncodingErrorKind::Malformed {
+                    malformkind: "malformed encoded word"
+                }, mail_type).into());
+            }
         }
     }
 

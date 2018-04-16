@@ -1,138 +1,171 @@
-use std::io;
+use std::fmt::{self, Display};
 
-use base64;
-use quoted_printable;
-use idna::uts46::{ Errors as PunyCodeErrors };
-use mime::AnyMediaType;
+use failure::{Context, Fail, Backtrace};
 use ::MailType;
 
-// we do not wan't dependencies to have to import error_chain
-// just to have some of the additional error chaining functions
-pub use error_chain::ChainedError;
+pub const UNKNOWN: &str = "<unknown>";
+pub const INVALID_NEWLINE_CHAR: &str = "invalid newline char";
+pub const UTF_8: &str = "utf-8";
+pub const US_ASCII: &str = "us-ascii";
 
-#[allow(unused_doc_comment)]
-error_chain! {
+#[derive(Copy, Clone, Debug, Fail, PartialEq, Eq, Hash)]
+pub enum EncodingErrorKind {
+    #[fail(display = "expected <{}> text encoding {} got ",
+        expected_encoding, got_encoding)]
+    InvalidTextEncoding {
+        expected_encoding: &'static str,
+        got_encoding: &'static str
+    },
 
-    foreign_links {
-        Io( io::Error );
-        DecodeBase64(base64::DecodeError);
-        DecodeQuotedPrintable(quoted_printable::QuotedPrintableError);
+    #[fail(display = "hard line length limit breached (>= 998 bytes without CRLF)")]
+    HardLineLengthLimitBreached,
+
+    #[fail(display = "data can not be encoded with the {} encoding", encoding)]
+    NotEncodable {
+        encoding: &'static str,
+    },
+
+    #[fail(display = "data was malformed through {}", malformkind)]
+    Malformed {
+        malformkind: &'static str,
+    },
+
+    #[fail(display = "the mail body data cannot be accessed")]
+    AccessingMailBodyFailed,
+
+    #[fail(display = "{}", kind)]
+    Other { kind: &'static str }
+
+    //ErrorKinds potentially needed when using this wrt. to decoding the mail encoding
+    //UnsupportedEncoding { encoding: &'static str }
+}
+
+// A error wrt. the used encoding. i.e. the encoding of the encoding or the
+// decoding of the encoding, so it's meant for the current encoding and the
+// future decoding features
+#[derive(Debug)]
+pub struct EncodingError {
+    inner: Context<EncodingErrorKind>,
+    mail_type: Option<MailType>
+}
+
+impl EncodingError {
+    pub fn kind(&self) -> EncodingErrorKind {
+        *self.inner.get_context()
     }
 
-    errors {
+    pub fn mail_type(&self) -> Option<MailType> {
+        self.mail_type
+    }
 
-        HeaderTypeMixup {
-            description(concat!(
-                "multiple header types with the same name, which differ in quantity or validator"
-            ))
+    /// # Panics
+    ///
+    /// panics if the mail type info was already added before and
+    /// the added mail type info differs from the previously added
+    /// type info
+    pub fn add_mail_type_info(&mut self, mail_type: MailType) {
+        let current_mt = self.mail_type();
+        if let Some(current_mail_type) = current_mt {
+            if current_mail_type != mail_type {
+                panic!("[BUG] mail type info conflicting with previous added info");
+            }
+        } else {
+            self.mail_type = Some(mail_type);
         }
+    }
+}
 
-        InvalidInput(for_usage_in: &'static str, input: String, mail_type: MailType) {
-            description("the given input was invalid for the given use case")
-            display("the input is invalid for usage wrt. {}. Input: {:?} (mt: {:?})",
-                for_usage_in, input, mail_type)
+impl From<EncodingErrorKind> for EncodingError {
+    fn from(ctx: EncodingErrorKind) -> Self {
+        EncodingError {
+            inner: Context::new(ctx),
+            mail_type: None
         }
+    }
+}
 
-        /// the contextual validation of the header using the headers validator failed
-        ///
-        /// This can e.g. happen if the header contains a multi-mailbox resent-from, but
-        /// no resent-sender header.
-        HeaderValidationFailure {
-            description("validation of header in HeaderMap failed")
+impl From<Context<EncodingErrorKind>> for EncodingError {
+    fn from(inner: Context<EncodingErrorKind>) -> Self {
+        EncodingError {
+            inner, mail_type: None
         }
+    }
+}
 
-        HeaderComponentEncodingFailure {
-            description("encoding header component failed")
+impl From<(EncodingErrorKind, MailType)> for EncodingError {
+    fn from((ctx, mail_type): (EncodingErrorKind, MailType)) -> Self {
+        EncodingError {
+            inner: Context::new(ctx),
+            mail_type: Some(mail_type)
         }
+    }
+}
 
-        /// adding a header to the header map failed
-        ///
-        /// use `.cause()` to gain more information about why/how it did
-        /// fail.
-        FailedToAddHeader(name: &'static str) {
-            description("failed to add a header filed to the header map")
-            display("failed to add the field {:?} to the header map", name)
+impl From<(Context<EncodingErrorKind>, MailType)> for EncodingError {
+    fn from((inner, mail_type): (Context<EncodingErrorKind>, MailType)) -> Self {
+        EncodingError {
+            inner, mail_type: Some(mail_type)
         }
+    }
+}
 
-        HardLineLengthLimitBreached {
-            description("the line length is limited to 998 bytes (excluding tailing \r\n)")
+impl Fail for EncodingError {
+
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
+    }
+}
+
+impl Display for EncodingError {
+
+    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(mail_type) = self.mail_type() {
+            write!(fter, "[{:?}]", mail_type)?;
+        } else {
+            write!(fter, "[<no_mail_type>]")?;
         }
+        Display::fmt(&self.inner, fter)
+    }
+}
 
 
-        MalformedEncodedWord(word: String) {
-            description("the encoded word is not well-formed")
-            display("the encoded word {:?} is not well-formed", word)
+#[macro_export]
+macro_rules! ec_bail {
+    (kind: $($tt:tt)*) => ({
+        return Err($crate::error::EncodingError::from(
+            $crate::error::EncodingErrorKind:: $($tt)*))
+    });
+    (mail_type: $mt:expr, kind: $($tt:tt)*) => ({
+        return Err($crate::error::EncodingError::from((
+            $crate::error::EncodingErrorKind:: $($tt)*,
+            $mt
+        )))
+    });
+}
 
-        }
+#[cfg(test)]
+mod test {
 
-        PunyCodeingDomainFailed( errors: PunyCodeErrors ) {
-            description( "using puny code to encode the domain failed" )
-        }
+    #[test]
+    fn bail_compiles_v1() {
+        let func = || -> Result<(), ::error::EncodingError> {
+            ec_bail!(kind: Other { kind: "test"});
+            #[allow(unreachable_code)] Ok(())
+        };
+        assert!((func)().is_err());
+    }
 
-        InvalidLineBrake {
-            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\"")
-        }
-
-        NonUtf8Body {
-            description("can not convert body to string as it contains non utf8 chars")
-        }
-
-        Utf8InHeaderRequiresInternationalizedMail {
-            description("to use utf-8 in a header a internationalized mail is needed")
-        }
-
-        InvalidHeaderName(name: String) {
-            description( "given header name is not valid" )
-            display( "{:?} is not a valid header name", name )
-        }
-
-        //------------------------------------- DEPRECATED --------------------------------//
-
-
-        //TODO mv to `mail-codec` && `mail-codec-composition`
-        NeedAtLastOneBodyInMultipartMail {
-
-        }
-
-        //TODO mv to `mail-codec`
-        GeneratingMimeFailed {
-
-        }
-
-
-        //TODO mv to `mail-codec`
-        ContentTypeAndBodyIncompatible {
-            description( concat!(
-                "given content type is incompatible with body,",
-                "e.g. using a non multipart mime with a multipart body" ) )
-        }
-
-
-        //TODO mv to `mail-codec`
-        Invalide7BitValue( byte: u8 ) {
-            description( "the byte is not valid in 7bit (content transfer) encoding" )
-        }
-
-        //TODO mv to `mail-codec`
-        Invalide8BitValue( val: u8 ) {
-            description( "the byte is not valid in 8bit (content transfer) encoding" )
-        }
-
-        //TODO mv to `mail-codec`
-        Invalide7BitSeq( byte: u8 ) {
-            description( "the byte seq is not valid in 7bit (content transfer) encoding" )
-        }
-
-        //TODO mv to `mail-codec`
-        Invalide8BitSeq( val: u8 ) {
-            description( "the byte seq is not valid in 8bit (content transfer) encoding" )
-        }
-
-        //TODO mv to `mail-codec`
-        NotMultipartMime( mime: AnyMediaType ) {
-            description( "expected a multipart mime for a multi part body" )
-            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
-        }
-
+    #[test]
+    fn bail_compiles_v2() {
+        fn mail_type() -> ::MailType { ::MailType::Internationalized }
+        let func = || -> Result<(), ::error::EncodingError> {
+            ec_bail!(mail_type: mail_type(), kind: Other { kind: "testicle" });
+            #[allow(unreachable_code)] Ok(())
+        };
+        assert!((func)().is_err());
     }
 }

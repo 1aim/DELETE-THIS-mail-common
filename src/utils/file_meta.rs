@@ -2,6 +2,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 
+//TODO potentially move this to `mail-headers`
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct FileMeta {

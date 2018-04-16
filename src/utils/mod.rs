@@ -3,9 +3,6 @@ use std::cell::RefCell;
 use std::mem;
 use std::fmt::{self, Debug};
 
-use error::Error;
-
-
 mod file_meta;
 pub use self::file_meta::FileMeta;
 
@@ -30,44 +27,7 @@ impl<I> Debug for DebugIterableOpaque<I>
 }
 
 
-
-//TODO replace with std TryFrom once it is stable
-// (either a hard replace, or a soft replace which implements HeaderTryFrom if TryFrom exist)
-pub trait HeaderTryFrom<T>: Sized {
-    fn try_from(val: T) -> Result<Self, Error>;
-}
-
-pub trait HeaderTryInto<T>: Sized {
-    fn try_into(self) -> Result<T, Error>;
-}
-
-impl<F, T> HeaderTryInto<T> for F where T: HeaderTryFrom<F> {
-    fn try_into(self) -> Result<T, Error> {
-        T::try_from(self)
-    }
-}
-
-
-impl<T> HeaderTryFrom<T> for T {
-    fn try_from(val: T) -> Result<Self, Error> {
-        Ok( val )
-    }
-}
-
-// It is not possible to auto-implement HeaderTryFrom for From/Into as
-// this will make new HeaderTryFrom implementations outside of this care
-// nearly impossible making the trait partially useless
-//
-//impl<T, F> HeaderTryFrom<F> for T where F: Into<T> {
-//    fn try_from(val: F) -> Result<T, Error> {
-//        Ok( val.into() )
-//    }
-//}
-
-
-
-
-//FIXME: make it ?Sized once it's supported by rust
+//FIXME[rust/fat pointer cast]: make it ?Sized once it's supported by rust
 ///
 /// Used to undo type erasure in a generic context,
 /// roughly semantically eqivalent to creating a `&Any`
@@ -96,7 +56,7 @@ pub fn uneraser_ref<GOT: 'static, EXP: 'static>(inp: &GOT ) -> Option<&EXP>  {
     }
 }
 
-//FIXME: make it ?Sized once it's supported by rust
+//FIXME[rust/fat pointer cast]: make it ?Sized once it's supported by rust
 #[inline(always)]
 pub fn uneraser_mut<GOT: 'static, EXP: 'static>(inp: &mut GOT ) -> Option<&mut EXP> {
     if TypeId::of::<GOT>() == TypeId::of::<EXP>() {

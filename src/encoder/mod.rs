@@ -1,213 +1,32 @@
-use std::any::{Any, TypeId};
-use std::fmt::{self, Debug};
-use std::result::{ Result as StdResult };
 use std::borrow::Cow;
 use std::str;
-use std::sync::Arc;
 
+use failure::Fail;
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
-use error::{Result, Error, ErrorKind};
 use grammar::is_atext;
 use ::MailType;
+use ::error::{
+    EncodingError, EncodingErrorKind,
+    INVALID_NEWLINE_CHAR, UNKNOWN, UTF_8, US_ASCII
+};
 
-use super::traits::BodyBuffer;
+#[cfg(feature="traceing")]
+#[cfg_attr(test, macro_use)]
+mod trace;
+#[cfg_attr(test, macro_use)]
+mod encodable;
+mod body;
+
+#[cfg(feature="traceing")]
+pub use self::trace::*;
+pub use self::encodable::*;
+pub use self::body::*;
 
 /// as specified in RFC 5322 not including CRLF
-const LINE_LEN_SOFT_LIMIT: usize = 78;
+pub const LINE_LEN_SOFT_LIMIT: usize = 78;
 /// as specified in RFC 5322 (mail) + RFC 5321 (smtp) not including CRLF
-const LINE_LEN_HARD_LIMIT: usize = 998;
-
-// can not be moved to `super::traits` as it depends on the
-// EncodeHandle defined here
-/// Trait Implemented by "components" used in header field bodies
-///
-/// This trait can be turned into a trait object allowing runtime
-/// genericallity over the "components" if needed.
-pub trait EncodableInHeader: Send + Sync + Any + Debug {
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()>;
-
-    fn boxed_clone(&self) -> Box<EncodableInHeader>;
-
-    #[doc(hidden)]
-    fn type_id( &self ) -> TypeId {
-        TypeId::of::<Self>()
-    }
-}
-
-//TODO we now could use MOPA or similar crates
-impl EncodableInHeader {
-
-    #[inline(always)]
-    pub fn is<T: EncodableInHeader>(&self) -> bool {
-        self.type_id() == TypeId::of::<T>()
-    }
-
-
-    #[inline]
-    pub fn downcast_ref<T: EncodableInHeader>(&self) -> Option<&T> {
-        if self.is::<T>() {
-            Some( unsafe { &*( self as *const EncodableInHeader as *const T) } )
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn downcast_mut<T: EncodableInHeader>(&mut self) -> Option<&mut T> {
-        if self.is::<T>() {
-            Some( unsafe { &mut *( self as *mut EncodableInHeader as *mut T) } )
-        } else {
-            None
-        }
-    }
-}
-
-impl Clone for Box<EncodableInHeader> {
-
-    fn clone(&self) -> Self {
-        self.boxed_clone()
-    }
-}
-
-
-pub trait EncodableInHeaderBoxExt: Sized {
-    fn downcast<T: EncodableInHeader>(self) -> StdResult<Box<T>, Self>;
-}
-
-impl EncodableInHeaderBoxExt for Box<EncodableInHeader> {
-
-    fn downcast<T: EncodableInHeader>(self) -> StdResult<Box<T>, Self> {
-        if EncodableInHeader::is::<T>(&*self) {
-            let ptr: *mut EncodableInHeader = Box::into_raw(self);
-            Ok( unsafe { Box::from_raw(ptr as *mut T) } )
-        } else {
-            Err( self )
-        }
-    }
-}
-
-impl EncodableInHeaderBoxExt for Box<EncodableInHeader+Send> {
-
-    fn downcast<T: EncodableInHeader>(self) -> StdResult<Box<T>, Self> {
-        if EncodableInHeader::is::<T>(&*self) {
-            let ptr: *mut EncodableInHeader = Box::into_raw(self);
-            Ok( unsafe { Box::from_raw(ptr as *mut T) } )
-        } else {
-            Err( self )
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! enc_func {
-    (|$enc:ident : &mut EncodeHandle| $block:block) => ({
-        fn _anonym($enc: &mut EncodeHandle) -> $crate::error::Result<()> {
-            $block
-        }
-        let fn_pointer = _anonym as fn(&mut EncodeHandle) -> $crate::error::Result<()>;
-        $crate::codec::EncodeFn::new(fn_pointer)
-    });
-}
-
-type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodeHandle<'b>) -> Result<()>;
-
-#[derive(Clone, Copy)]
-pub struct EncodeFn(_EncodeFn);
-
-impl EncodeFn {
-    pub fn new(func: _EncodeFn) -> Self {
-        EncodeFn(func)
-    }
-}
-
-impl EncodableInHeader for EncodeFn {
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
-        (self.0)(encoder)
-    }
-
-    fn boxed_clone(&self) -> Box<EncodableInHeader> {
-        Box::new(*self)
-    }
-}
-
-impl Debug for EncodeFn {
-    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
-        write!(fter, "EncodeFn(..)")
-    }
-}
-
-#[macro_export]
-macro_rules! enc_closure {
-    ($($t:tt)*) => ({
-        $crate::codec::EncodeClosure::new($($t)*)
-    });
-}
-
-pub struct EncodeClosure<FN: 'static>(Arc<FN>)
-    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>;
-
-impl<FN: 'static> EncodeClosure<FN>
-    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
-{
-    pub fn new(closure: FN) -> Self {
-        EncodeClosure(Arc::new(closure))
-    }
-}
-
-impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
-    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
-{
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
-        (self.0)(encoder)
-    }
-
-    fn boxed_clone(&self) -> Box<EncodableInHeader> {
-        Box::new(self.clone())
-    }
-}
-
-impl<FN: 'static> Clone for EncodeClosure<FN>
-    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
-{
-    fn clone(&self) -> Self {
-        EncodeClosure(self.0.clone())
-    }
-}
-
-
-impl<FN: 'static> Debug for EncodeClosure<FN>
-    where FN: Send + Sync + for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<()>
-{
-    fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
-        write!(fter, "EncodeClosure(..)")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Section<R: BodyBuffer> {
-    String(String),
-    BodyPayload(R)
-}
-
-impl<R> Section<R>
-    where R: BodyBuffer
-{
-    pub fn unwrap_header(self) -> String {
-        if let Section::String(res) = self {
-            res
-        } else {
-            panic!("expected `Section::Header` got `Section::Body`")
-        }
-    }
-    pub fn unwrap_body(self) -> R {
-        if let Section::BodyPayload(res) = self {
-            res
-        } else {
-            panic!("expected `Section::MIMEBody` got `Section::Header`")
-        }
-    }
-}
+pub const LINE_LEN_HARD_LIMIT: usize = 998;
 
 
 /// Encoder for a Mail providing a buffer for encodable traits
@@ -221,40 +40,6 @@ pub struct Encoder<R: BodyBuffer> {
     #[cfg(feature="traceing")]
     pub trace: Vec<TraceToken>
 }
-
-
-/// If it is a test build the Encoder will
-/// have an additional `pub trace` field,
-/// which will contain a Vector of `Token`s
-/// generated when writing to the string buffer.
-///
-/// For example when calling `.write_utf8("hy")`
-/// following tokens will be added:
-/// `[NowUtf8, Text("hy")]`
-#[cfg(feature="traceing")]
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum TraceToken {
-    MarkFWS,
-    CRLF,
-    TruncateToCRLF,
-    Text(String),
-    NowChar,
-    NowStr,
-    NowAText,
-    NowUtf8,
-    NowCondText,
-    NowUnchecked,
-    NewSection,
-    End,
-    /// used to seperate a header from a body
-    ///
-    /// be aware that `Section::BodyPaylod` just
-    /// contains the Payload, so e.g. headers from
-    /// mime bodies or mime multipart body boundaries
-    /// still get written into the string buffer
-    BlankLine
-}
-
 
 impl<B: BodyBuffer> Encoder<B> {
 
@@ -291,7 +76,8 @@ impl<B: BodyBuffer> Encoder<B> {
             #[cfg(feature="traceing")]
             { EncodeHandle::new(self.mail_type, string, &mut self.trace) }
         } else {
-            //REFACTOR(NLL): with NLL we can combine both if-else blocks not needing unreachable! anymore
+            //FIXME[rust/nll]: with NLL we probably can combine both if-else blocks,
+            // not needing unreachable! anymore
             unreachable!("we already made sure the last is Section::Header")
         }
     }
@@ -303,8 +89,8 @@ impl<B: BodyBuffer> Encoder<B> {
     ///   undo anything before a `finish_header()` call but will discard partial
     ///   writes
     /// - if `func` succeeded `handle.finish_header()` is called
-    pub fn write_header_line<FN>(&mut self, func: FN) -> Result<()>
-        where FN: FnOnce(&mut EncodeHandle) -> Result<()>
+    pub fn write_header_line<FN>(&mut self, func: FN) -> Result<(), EncodingError>
+        where FN: FnOnce(&mut EncodeHandle) -> Result<(), EncodingError>
     {
         let mut handle  = self.encode_handle();
         match func(&mut handle) {
@@ -314,7 +100,7 @@ impl<B: BodyBuffer> Encoder<B> {
             },
             Err(e) => {
                 handle.undo_header();
-                Err(e.chain_err(|| "with_handle finished with an error" ))
+                Err(e)
             }
         }
 
@@ -353,20 +139,22 @@ impl<B: BodyBuffer> Encoder<B> {
     /// # Error
     ///
     /// This can fail if a call to `BodyBuffer::with_slice` fails
-    /// (e.g. because it refered to a shared resoruce which was invalidated)
+    /// (e.g. because it referred to a shared resource which was invalidated)
     ///
-    pub fn to_vec(&self) -> Result<Vec<u8>> {
+    pub fn to_vec(&self) -> Result<Vec<u8>, EncodingError> {
         let mut out = Vec::new();
         for section in self.sections.iter() {
             match *section {
                 Section::String(ref string) => out.extend(string.bytes()),
-                Section::BodyPayload(ref body) => body.with_slice(|slice| {
-                    out.extend(slice);
-                    if !slice.ends_with(b"\r\n") {
-                        out.extend(b"\r\n")
-                    }
-                    Ok(())
-                })?
+                Section::BodyPayload(ref body) => {
+                    body.with_slice(|slice| {
+                        out.extend(slice);
+                        if !slice.ends_with(b"\r\n") {
+                            out.extend(b"\r\n")
+                        }
+                        Ok(())
+                    })?
+                }
             }
         }
         Ok(out)
@@ -375,39 +163,47 @@ impl<B: BodyBuffer> Encoder<B> {
     /// # Error
     ///
     /// This can fail if a body does not contain valid utf8, or
-    /// if `BodyBuffer::with_slice` fails (e.g. because it refered
-    /// to a shared resoruce which was invalidated)
-    pub fn to_string(&self) -> Result<String> {
+    /// if `BodyBuffer::with_slice` fails (e.g. because it referred
+    /// to a shared resource which was invalidated)
+    pub fn to_string(&self) -> Result<String, EncodingError> {
         self._to_string(|slice| match str::from_utf8(slice) {
-            Ok(val) => Ok(Cow::Borrowed(val)),
-            Err(e) => Err(Error::with_chain(e, ErrorKind::NonUtf8Body))
+            Ok(str_slice) => Ok(Cow::Borrowed(str_slice)),
+            Err(err) => Err(EncodingError::from((
+                err.context(EncodingErrorKind::InvalidTextEncoding {
+                    expected_encoding: UTF_8,
+                    got_encoding: UNKNOWN
+                }),
+                self.mail_type()
+            )))
         })
     }
 
     /// # Error
     ///
     /// This can fail if a call to `BodyBuffer::with_slice` fails
-    /// (e.g. because it refered to a shared resoruce which was invalidated)
+    /// (e.g. because it referred to a shared resource which was invalidated)
     ///
-    pub fn to_string_lossy(&self) -> Result<String> {
+    pub fn to_string_lossy(&self) -> Result<String, EncodingError> {
         self._to_string(|slice| Ok(String::from_utf8_lossy(slice)))
     }
 
-    fn _to_string<F>(&self, mut bodyslice2string: F) -> Result<String>
-        where F: FnMut(&[u8]) -> Result<Cow<str>>
+    fn _to_string<F>(&self, mut bodyslice2string: F) -> Result<String, EncodingError>
+        where F: FnMut(&[u8]) -> Result<Cow<str>, EncodingError>
     {
         let mut out = String::new();
         for section in self.sections.iter() {
             match *section {
                 Section::String(ref string) => { out.push_str(&*string); }
-                Section::BodyPayload(ref body) => body.with_slice(|slice| {
-                    let text = bodyslice2string(slice)?;
-                    out.push_str(&*text);
-                    if !text.ends_with("\r\n") {
-                        out.push_str("\r\n");
-                    }
-                    Ok(())
-                })?
+                Section::BodyPayload(ref body) => {
+                    body.with_slice(|slice| {
+                        let text = bodyslice2string(slice)?;
+                        out.push_str(&*text);
+                        if !text.ends_with("\r\n") {
+                            out.push_str("\r\n");
+                        }
+                        Ok(())
+                    })?
+                }
             }
         }
         Ok(out)
@@ -419,7 +215,7 @@ impl<B: BodyBuffer> Encoder<B> {
 /// A handle providing method to write to the underlying buffer
 /// keeping track of newlines the current line length and places
 /// where the line can be broken so that the soft line length
-/// limit (78) and the hard length limit (998) can be keept.
+/// limit (78) and the hard length limit (998) can be kept.
 ///
 /// It's basically a string buffer which know how to brake
 /// lines at the right place.
@@ -563,7 +359,7 @@ impl<'inner> EncodeHandle<'inner> {
     ///
     /// # Trace (test build only)
     /// does push `NowChar` and then can push `Text`,`CRLF`
-    pub fn write_char(&mut self, ch: SoftAsciiChar) -> Result<()>  {
+    pub fn write_char(&mut self, ch: SoftAsciiChar) -> Result<(), EncodingError>  {
         #[cfg(feature="traceing")]
         { self.trace.push(TraceToken::NowChar) }
         self.internal_write_char(ch.into())
@@ -584,7 +380,7 @@ impl<'inner> EncodeHandle<'inner> {
     /// # Trace (test build only)
     /// does push `NowStr` and then can push `Text`,`CRLF`
     ///
-    pub fn write_str(&mut self, s: &SoftAsciiStr)  -> Result<()>  {
+    pub fn write_str(&mut self, s: &SoftAsciiStr)  -> Result<(), EncodingError>  {
         #[cfg(feature="traceing")]
         { self.trace.push(TraceToken::NowStr) }
         self.internal_write_str(s.as_str())
@@ -618,30 +414,38 @@ impl<'inner> EncodeHandle<'inner> {
         }
     }
 
-    pub fn write_utf8(&mut self, s: &str) -> Result<()> {
+    pub fn write_utf8(&mut self, s: &str) -> Result<(), EncodingError> {
         if self.mail_type().is_internationalized() {
             #[cfg(feature="traceing")]
             { self.trace.push(TraceToken::NowUtf8) }
-            self.internal_write_str(s).into()
+            self.internal_write_str(s)
         } else {
-            bail!(ErrorKind::Utf8InHeaderRequiresInternationalizedMail)
+            //FEAT[extended error data]: prepend a stringy error of the line
+            // up to this call and including this lines data
+            Err(EncodingError::from((
+                EncodingErrorKind::InvalidTextEncoding {
+                    expected_encoding: US_ASCII,
+                    got_encoding: UTF_8
+                },
+                self.mail_type()
+            )))
         }
     }
 
     /// Writes a str assumed to be atext if it is atext given the mail type
     ///
-    /// This method is mainly an optimazation as the "is atext" and is
+    /// This method is mainly an optimization as the "is atext" and is
     /// "is ascii if MailType is Ascii" aspects are checked at the same
     /// time resulting in a str which you know is ascii _if_ the mail
     /// type is Ascii and which might be non-us-ascii if the mail type
-    /// is Inernationalized.
+    /// is Internationalized.
     ///
     /// # Error (ConditionalWriteResult)
     /// - fails with `ConditionFailure` if the text is not valid atext,
-    ///   this indicirectly also includes the utf8/Internationalization check
+    ///   this indirectly also includes the utf8/Internationalization check
     ///   as the `atext` grammar differs between normal and internationalized
     ///   mail.
-    /// - fails with `GeneralGailure` if the hard line length limit is reached and
+    /// - fails with `GeneralFailure` if the hard line length limit is reached and
     ///   the line can't be broken with soft line breaks
     /// - or if buffer would contain a orphan '\r' or '\n' after the write
     ///   (excluding a tailing `'\r'` as it is still valid if followed by an
@@ -705,12 +509,12 @@ impl<'inner> EncodeHandle<'inner> {
     ///
     /// ```ignore
     /// check_if_text_if_valid(text)?;
-    /// handle.wite_str_unchecked(text)?;
+    /// handle.write_str_unchecked(text)?;
     /// ```
     ///
     /// through is gives a different tracing its roughly equivalent.
     ///
-    pub fn write_str_unchecked( &mut self, s: &str) -> Result<()> {
+    pub fn write_str_unchecked( &mut self, s: &str) -> Result<(), EncodingError> {
         #[cfg(feature="traceing")]
         { self.trace.push(TraceToken::NowUnchecked) }
         self.internal_write_str(s)
@@ -731,7 +535,7 @@ impl<'inner> EncodeHandle<'inner> {
     /// # Trace (test build only)
     /// - can push 0-1 of `[CRLF, TruncateToCRLF]`
     /// - then does push `End`
-    /// - calling `funish_current()` multiple times in a row
+    /// - calling `finish_current()` multiple times in a row
     ///   will not generate multiple `End` tokens, just one
     pub fn finish_header(&mut self) {
         self.start_new_line();
@@ -767,12 +571,12 @@ impl<'inner> EncodeHandle<'inner> {
     /// This method exists for convenience.
     ///
     /// Note that it can not fail a you just pushed
-    /// a place to breake the line befor writing a space.
+    /// a place to brake the line before writing a space.
     ///
     /// Note that currently soft line breaks will not
-    /// collapse whitespaces so if you use `write_fws`
-    /// and then the line is broken there it will start
-    /// with two spaces (one from `\r\n ` and one which
+    /// collapse whitespace. As such if you use `write_fws`
+    /// and then the line is broken at that position it will
+    /// start with two spaces (one from `\r\n ` and one which
     /// had been there before).
     pub fn write_fws(&mut self) {
         self.mark_fws_pos();
@@ -786,9 +590,9 @@ impl<'inner> EncodeHandle<'inner> {
 
     /// this might partial write some data and then fail.
     /// while we could implement a undo option it makes
-    /// little sense for the use case the generally aviable
+    /// little sense for the use case the generally available
     /// `undo_header` is enough.
-    fn internal_write_str(&mut self, s: &str)  -> Result<()>  {
+    fn internal_write_str(&mut self, s: &str)  -> Result<(), EncodingError>  {
         for ch in s.chars() {
             self.internal_write_char(ch)?
         }
@@ -828,7 +632,7 @@ impl<'inner> EncodeHandle<'inner> {
 
     fn break_line_on_fws(&mut self) -> bool {
         if self.content_before_fws && self.last_fws_idx > self.line_start_idx {
-            //INDEX_SAFE: self.content_before_fws is only true if ther is at last one char
+            //INDEX_SAFE: self.content_before_fws is only true if there is at last one char
             // if so self.last_ws_idx does not point at the end of the buffer but inside
             let newline = match self.buffer.as_bytes()[self.last_fws_idx] {
                 b' ' | b'\t' => "\r\n",
@@ -847,18 +651,24 @@ impl<'inner> EncodeHandle<'inner> {
         }
     }
 
-    fn internal_write_char(&mut self, ch: char) -> Result<()> {
+    fn internal_write_char(&mut self, ch: char) -> Result<(), EncodingError> {
         if ch == '\n' {
             if self.skipped_cr {
                 self.start_new_line()
             } else {
-                bail!(ErrorKind::InvalidLineBrake);
+                ec_bail!(
+                    mail_type: self.mail_type(),
+                    kind: Malformed { malformkind: INVALID_NEWLINE_CHAR }
+                );
             }
             self.skipped_cr = false;
             return Ok(());
         } else {
             if self.skipped_cr {
-                bail!(ErrorKind::InvalidLineBrake);
+                ec_bail!(
+                    mail_type: self.mail_type(),
+                    kind: Malformed { malformkind: INVALID_NEWLINE_CHAR }
+                );
             }
             if ch == '\r' {
                 self.skipped_cr = true;
@@ -871,7 +681,10 @@ impl<'inner> EncodeHandle<'inner> {
         if self.current_line_byte_length() >= LINE_LEN_SOFT_LIMIT {
             if !self.break_line_on_fws() {
                 if self.buffer.len() == LINE_LEN_HARD_LIMIT {
-                    bail!(ErrorKind::HardLineLengthLimitBreached)
+                    ec_bail!(
+                        mail_type: self.mail_type(),
+                        kind: HardLineLengthLimitBreached
+                    );
                 }
             }
         }
@@ -879,7 +692,7 @@ impl<'inner> EncodeHandle<'inner> {
         self.buffer.push(ch);
         #[cfg(feature="traceing")]
         {
-            //REFACTOR(NLL): just use a `if let`-`else` with NLL's
+            //FIXME[rust/nll]: just use a `if let`-`else` with NLL's
             let need_new =
                 if let Some(&mut TraceToken::Text(ref mut string)) = self.trace.last_mut() {
                     string.push(ch);
@@ -898,7 +711,7 @@ impl<'inner> EncodeHandle<'inner> {
         // we can't allow "blank" lines
         if ch != ' ' && ch != '\t' {
             // if there is no fws this is equiv to line_has_content
-            // else line_has_content = self.content_befor_fws|self.content_since_fws
+            // else line_has_content = self.content_before_fws|self.content_since_fws
             self.content_since_fws = true;
         }
         Ok(())
@@ -908,11 +721,11 @@ impl<'inner> EncodeHandle<'inner> {
 pub enum ConditionalWriteResult<'a, 'b: 'a> {
     Ok,
     ConditionFailure(&'a mut EncodeHandle<'b>),
-    GeneralFailure(Error)
+    GeneralFailure(EncodingError)
 }
 
-impl<'a, 'b: 'a> From<Result<()>> for ConditionalWriteResult<'a, 'b> {
-    fn from(v: Result<()>) -> Self {
+impl<'a, 'b: 'a> From<Result<(), EncodingError>> for ConditionalWriteResult<'a, 'b> {
+    fn from(v: Result<(), EncodingError>) -> Self {
         match v {
             Ok(()) => ConditionalWriteResult::Ok,
             Err(e) => ConditionalWriteResult::GeneralFailure(e)
@@ -923,8 +736,8 @@ impl<'a, 'b: 'a> From<Result<()>> for ConditionalWriteResult<'a, 'b> {
 impl<'a, 'b: 'a> ConditionalWriteResult<'a, 'b> {
 
     #[inline]
-    pub fn handle_condition_failure<FN>(self, func: FN) -> Result<()>
-        where FN: FnOnce(&mut EncodeHandle) -> Result<()>
+    pub fn handle_condition_failure<FN>(self, func: FN) -> Result<(), EncodingError>
+        where FN: FnOnce(&mut EncodeHandle) -> Result<(), EncodingError>
     {
         use self::ConditionalWriteResult as CWR;
 
@@ -940,166 +753,17 @@ impl<'a, 'b: 'a> ConditionalWriteResult<'a, 'b> {
 
 
 
-/// A BodyBuf implementation based on a Vec<u8>
-///
-/// this is mainly used for having a simple
-/// BodyBuf implementation for testing.
-pub struct VecBodyBuf(pub Vec<u8>);
 
-impl BodyBuffer for VecBodyBuf {
-    fn with_slice<FN, R>(&self, func: FN) -> Result<R>
-        where FN: FnOnce(&[u8]) -> Result<R>
-    {
-        func(self.0.as_slice())
-    }
-}
 
-/// Trait Implemented by mainly by structs representing a mail or
-/// a part of it
-pub trait Encodable<B: BodyBuffer> {
-    fn encode( &self, encoder:  &mut Encoder<B>) -> Result<()>;
-}
-
-#[cfg(feature="traceing")]
-pub fn simplify_trace_tokens<I: IntoIterator<Item=TraceToken>>(inp: I) -> Vec<TraceToken> {
-    use std::mem;
-    use self::TraceToken::*;
-    let iter = inp.into_iter()
-        .filter(|t| {
-            match *t {
-                NowChar |
-                NowStr |
-                NowAText |
-                NowUtf8 |
-                NowUnchecked |
-                NowCondText => false,
-                _ => true
-            }
-        });
-    let (min, _max) = iter.size_hint();
-    let mut out =
-        if min > 0 { Vec::with_capacity(min) }
-        else { Vec::new() };
-    let mut textbf = String::new();
-    let mut had_text = false;
-    for token in iter {
-        match token {
-            Text(str) => {
-                had_text = true;
-                textbf.push_str(&*str)
-            },
-            e => {
-                if had_text {
-                    let text = mem::replace(&mut textbf, String::new());
-                    out.push(Text(text));
-                    had_text = false;
-                }
-                out.push(e);
-            }
-        }
-    }
-    if had_text {
-        out.push(Text(textbf))
-    }
-    out
-}
-
-#[cfg(feature="traceing")]
-#[macro_export]
-macro_rules! ec_test {
-    ( $(#[$attr:meta])* $name:ident, $inp:block => $mt:tt => [ $($tokens:tt)* ] ) => (
-
-        $(#[$attr])*
-        #[test]
-        fn $name() {
-            #![allow(unused_mut)]
-            use $crate::codec::{
-                EncodableInHeader,
-                EncodeHandle,
-                Encoder,
-                VecBodyBuf
-            };
-            use std::mem;
-            use $crate::error::Result;
-
-            let mail_type = {
-                let mt_str = stringify!($mt).to_lowercase();
-                match mt_str.as_str() {
-                    "utf8" |
-                    "internationalized"
-                        => $crate::MailType::Internationalized,
-                    "ascii"
-                        =>  $crate::MailType::Ascii,
-                    "mime8" |
-                    "mime8bit" |
-                    "mime8bitenabled"
-                        => $crate::MailType::Mime8BitEnabled,
-                    other => panic!( "invalid name for mail type: {}", other)
-                }
-            };
-
-            let mut encoder = Encoder::<VecBodyBuf>::new(mail_type);
-            {
-                //REFACTOR(catch): use catch block once stable
-                let doit = |ec: &mut EncodeHandle| -> Result<()> {
-                    let input = $inp;
-                    let to_encode: &EncodableInHeader = &input;
-                    to_encode.encode(ec)?;
-                    Ok(())
-                };
-                let mut handle = encoder.encode_handle();
-                doit(&mut handle).unwrap();
-                // we do not want to finish writing as we might
-                // test just parts of headers
-                mem::forget(handle);
-            }
-            let mut expected: Vec<$crate::codec::TraceToken> = Vec::new();
-            ec_test!{ __PRIV_TO_TOKEN_LIST expected $($tokens)* }
-            //skip over the NewSection part
-            let got = $crate::codec::simplify_trace_tokens(encoder.trace.into_iter().skip(1));
-            assert_eq!(got, expected)
-        }
-    );
-
-    (__PRIV_TO_TOKEN_LIST $col:ident Text $e:expr) => (
-        $col.push($crate::codec::TraceToken::Text({$e}.into()));
-    );
-    (__PRIV_TO_TOKEN_LIST $col:ident $token:ident) => (
-        $col.push($crate::codec::TraceToken::$token);
-    );
-    (__PRIV_TO_TOKEN_LIST $col:ident Text $e:expr, $($other:tt)*) => ({
-        ec_test!{ __PRIV_TO_TOKEN_LIST $col Text $e }
-        ec_test!{ __PRIV_TO_TOKEN_LIST $col $($other)* }
-    });
-    (__PRIV_TO_TOKEN_LIST $col:ident $token:ident, $($other:tt)*) => (
-        ec_test!{ __PRIV_TO_TOKEN_LIST $col $token }
-        ec_test!{ __PRIV_TO_TOKEN_LIST $col $($other)* }
-    );
-    (__PRIV_TO_TOKEN_LIST $col:ident ) => ();
-    //conflict with nom due to it using a crate exposing compiler_error...
-//    (__PRIV_TO_TOKEN_LIST $col:ident $($other:tt)*) => (
-//        compiler_error!( concat!(
-//            "syntax error in token list: ", stringify!($($other:tt)*)
-//        ))
-//    )
-}
-
-#[cfg(all(not(feature="traceing"), test))]
-compile_error! { "testing needs feature `traceing` to be enabled" }
-
-#[cfg(all(not(feature="traceing"), test))]
+#[cfg(test)]
 mod test {
-    #[test]
-    fn require_tracing_feature_for_tests() {
-        panic!("the feature tracing is required for tests")
-    }
-}
 
-#[cfg(all(feature="traceing", test))]
-mod test {
+    #[cfg(all(not(feature="traceing"), test))]
+    compile_error! { "testing needs feature `traceing` to be enabled" }
+
     use soft_ascii_string::{ SoftAsciiChar, SoftAsciiStr};
-    use error::Result;
     use ::MailType;
+    use ::error::{EncodingError, EncodingErrorKind};
 
     use super::TraceToken::*;
     use super::{
@@ -1123,15 +787,15 @@ mod test {
 
 
     impl BodyBuffer for VecBody {
-        fn with_slice<FN, R>(&self, func: FN) -> Result<R>
-            where FN: FnOnce(&[u8]) -> Result<R>
+        fn with_slice<FN, R>(&self, func: FN) -> Result<R, EncodingError>
+            where FN: FnOnce(&[u8]) -> Result<R, EncodingError>
         {
             func(self.data.as_slice())
         }
     }
 
     mod test_test_utilities {
-        use codec::TraceToken::*;
+        use encoder::TraceToken::*;
         use super::super::simplify_trace_tokens;
 
         #[test]
@@ -1876,7 +1540,7 @@ mod test {
             let mut encoder = Encoder::new(MailType::Internationalized);
             let res = encoder.write_header_line(|hdl| {
                 hdl.write_utf8("some partial writes")?;
-                bail!("error ;=)")
+                Err(EncodingErrorKind::Other { kind: "error ;=)" }.into())
             });
             assert_err!(res);
             assert_eq!(encoder.trace, vec![NewSection]);
@@ -1990,7 +1654,7 @@ mod test {
     }
 
     ec_test! {
-        does_ec_test_work_eith_encode_closure,
+        does_ec_test_work_with_encode_closure,
         {
             use super::EncodeHandle;
             let think = "hy";
@@ -2007,7 +1671,7 @@ mod test {
         {
             use super::EncodeHandle;
             // this is just a type system test, if it compiles it can bail
-            if false { bail!("if false..."); }
+            if false { ec_bail!(kind: Other { kind: "if false ..." }) }
             enc_func!(|x: &mut EncodeHandle| {
                 x.write_utf8("hy")
             })
@@ -2023,7 +1687,7 @@ mod test {
         struct TestType(&'static str);
 
         impl EncodableInHeader for TestType {
-            fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
+            fn encode(&self, encoder:  &mut EncodeHandle) -> Result<(), EncodingError> {
                 encoder.write_utf8(self.0)
             }
 
@@ -2036,7 +1700,7 @@ mod test {
         struct AnotherType(&'static str);
 
         impl EncodableInHeader for AnotherType {
-            fn encode(&self, encoder:  &mut EncodeHandle) -> Result<()> {
+            fn encode(&self, encoder:  &mut EncodeHandle) -> Result<(), EncodingError> {
                 encoder.write_utf8(self.0)
             }
 

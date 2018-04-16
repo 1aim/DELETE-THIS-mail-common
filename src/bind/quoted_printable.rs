@@ -1,8 +1,9 @@
 use soft_ascii_string::{ SoftAsciiChar, SoftAsciiString };
-use error::Result;
 use { quoted_printable as extern_quoted_printable };
 
-use super::traits::EncodedWordWriter;
+use failure::Fail;
+use ::error::{EncodingError, EncodingErrorKind};
+use super::encoded_word::EncodedWordWriter;
 
 /// a quoted printable encoding suitable for content transfer encoding,
 /// but _not_ suited for the encoding in encoded words
@@ -13,17 +14,24 @@ pub fn normal_encode<A: AsRef<[u8]>>(data: A) -> SoftAsciiString {
 
 /// a quoted printable decoding suitable for content transfer encoding
 #[inline]
-pub fn normal_decode<R: AsRef<[u8]>>( input: R ) -> Result<Vec<u8>> {
+pub fn normal_decode<R: AsRef<[u8]>>(input: R)
+    -> Result<Vec<u8>, EncodingError>
+{
     //extern_quoted_printable h
-    Ok( extern_quoted_printable::decode(
-        input.as_ref(),
-        extern_quoted_printable::ParseMode::Strict )? )
+    extern_quoted_printable::decode(
+        input.as_ref(), extern_quoted_printable::ParseMode::Strict
+    ).map_err(|err| err
+        .context(EncodingErrorKind::Malformed {
+            malformkind: "not quoted-printable data"
+        })
+        .into()
+    )
 }
 
 /// a quoted printable decoding suitable for decoding a quoted printable
 /// encpded text in encoded words
 #[inline(always)]
-pub fn encoded_word_decode<R: AsRef<[u8]>>( input: R ) -> Result<Vec<u8>> {
+pub fn encoded_word_decode<R: AsRef<[u8]>>( input: R ) -> Result<Vec<u8>, EncodingError> {
     //we can just use the stadard decoding
     normal_decode( input )
 }
@@ -161,8 +169,8 @@ fn lower_nibble_to_hex( half_byte: u8 ) -> SoftAsciiChar {
 #[cfg(test)]
 mod test {
     use soft_ascii_string::SoftAsciiStr;
-    use codec::EncodedWordEncoding;
-    use super::super::writer_impl::VecWriter;
+    use ::bind::encoded_word::EncodedWordEncoding;
+    use super::super::encoded_word::VecWriter;
     use super::*;
 
     #[test]

@@ -1,8 +1,9 @@
-use error::Result;
 use {base64 as extern_base64};
 use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar};
+use failure::Fail;
 
-use super::EncodedWordWriter;
+use ::error::{EncodingError, EncodingErrorKind};
+use super::encoded_word::EncodedWordWriter;
 
 const CHARSET: extern_base64::CharacterSet = extern_base64::CharacterSet::Standard;
 const NO_LINE_WRAP: extern_base64::LineWrap = extern_base64::LineWrap::NoWrap;
@@ -23,10 +24,15 @@ pub fn normal_encode<R: AsRef<[u8]>>(input: R) -> SoftAsciiString {
 }
 
 #[inline]
-pub fn normal_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>> {
-    Ok( extern_base64::decode_config( input.as_ref(), extern_base64::Config::new(
+pub fn normal_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>, EncodingError> {
+    extern_base64::decode_config( input.as_ref(), extern_base64::Config::new(
         CHARSET, USE_PADDING, NON_ECW_STRIP_WHITESPACE, LINE_WRAP
-    ))? )
+    )).map_err(|err| err
+        .context(EncodingErrorKind::Malformed {
+            malformkind: "not base64 data"
+        })
+        .into()
+    )
 }
 
 #[inline(always)]
@@ -107,10 +113,17 @@ fn _encoded_word_encode<O>( input: &str, out: &mut O )
 }
 
 #[inline(always)]
-pub fn encoded_word_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>> {
-    Ok( extern_base64::decode_config(input.as_ref(), extern_base64::Config::new(
+pub fn encoded_word_decode<R: AsRef<[u8]>>(input: R)
+    -> Result<Vec<u8>, EncodingError>
+{
+    extern_base64::decode_config(input.as_ref(), extern_base64::Config::new(
         CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, NO_LINE_WRAP
-    ) )? )
+    )).map_err(|err| err
+        .context(EncodingErrorKind::Malformed {
+           malformkind: "not base64 encoded word"
+        })
+        .into()
+    )
 }
 
 
@@ -119,8 +132,7 @@ pub fn encoded_word_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod test {
     use soft_ascii_string::SoftAsciiStr;
-    use codec::writer_impl::VecWriter;
-    use codec::EncodedWordEncoding;
+    use bind::encoded_word::{VecWriter, EncodedWordEncoding};
     use super::*;
 
     #[test]
