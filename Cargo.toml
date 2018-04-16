@@ -1,8 +1,8 @@
 [package]
 authors = ["Philipp Korber <p.korber@1aim.com>"]
-name = "mail-codec-core"
+name = "mail-common"
 description = "TODO"
-documentation = "https://docs.rs/mail-codec-core"
+documentation = "https://docs.rs/mail-common"
 keywords = []
 categories = []
 license = "MIT OR Apache-2.0"

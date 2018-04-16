@@ -1,4 +1,4 @@
-//! mail-codec-core does not ship with any predefined headers and components
+//! mail-common does not ship with any predefined headers and components
 //! except `RawUnstructured`, `TransferEncoding` and `DateTime`
 
 use soft_ascii_string::SoftAsciiStr;
