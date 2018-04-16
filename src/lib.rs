@@ -6,7 +6,6 @@ extern crate nom;
 extern crate owning_ref;
 extern crate chrono;
 extern crate mime;
-extern crate total_order_multi_map;
 extern crate soft_ascii_string;
 extern crate base64;
 extern crate quoted_printable;
@@ -18,12 +17,6 @@ extern crate vec1;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-
-
-pub use header::{
-    Header, HeaderMap,
-    HeaderName
-};
 
 pub use utils::{HeaderTryFrom, HeaderTryInto};
 
@@ -39,9 +32,6 @@ pub mod grammar;
 #[cfg_attr(test, macro_use)]
 pub mod codec;
 pub mod data;
-
-pub mod header;
-pub mod components;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum MailType {

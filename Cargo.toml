@@ -25,7 +25,6 @@ quoted-string = { git="https://github.com/1aim/quoted-string", version="0.5"}
 media-type-impl-utils = { git="https://github.com/1aim/media-type-impl-utils" }
 soft-ascii-string = "0.2"
 vec1 = { git="https://github.com/1aim/vec1" }
-total-order-multi-map = { git="https://github.com/1aim/total-order-multi-map" }
 
 [dependencies.mime]
 git="https://github.com/1aim/mime"
