@@ -700,7 +700,9 @@ impl<'inner> EncodeHandle<'inner> {
     ///     handle.write_str(SoftAsciiStr::from_str_unchecked(text))?;
     /// }
     /// ```
+    ///
     /// ==> instead ==>
+    ///
     /// ```ignore
     /// check_if_text_if_valid(text)?;
     /// handle.wite_str_unchecked(text)?;
