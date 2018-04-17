@@ -4,7 +4,6 @@ use failure::{Context, Fail, Backtrace};
 use ::MailType;
 
 pub const UNKNOWN: &str = "<unknown>";
-pub const INVALID_NEWLINE_CHAR: &str = "invalid newline char";
 pub const UTF_8: &str = "utf-8";
 pub const US_ASCII: &str = "us-ascii";
 
@@ -25,10 +24,8 @@ pub enum EncodingErrorKind {
         encoding: &'static str,
     },
 
-    #[fail(display = "data was malformed through {}", malformkind)]
-    Malformed {
-        malformkind: &'static str,
-    },
+    #[fail(display = "malformed data")]
+    Malformed,
 
     #[fail(display = "the mail body data cannot be accessed")]
     AccessingMailBodyFailed,
@@ -46,7 +43,8 @@ pub enum EncodingErrorKind {
 #[derive(Debug)]
 pub struct EncodingError {
     inner: Context<EncodingErrorKind>,
-    mail_type: Option<MailType>
+    mail_type: Option<MailType>,
+    str_context: Option<String>
 }
 
 impl EncodingError {
@@ -58,12 +56,22 @@ impl EncodingError {
         self.mail_type
     }
 
+    pub fn str_context(&self) -> Option<&str> {
+        self.str_context.as_ref().map(|s| &**s)
+    }
+
+    pub fn set_str_context<I>(&mut self, ctx: I)
+        where I: Into<String>
+    {
+        self.str_context = Some(ctx.into());
+    }
+
     /// # Panics
     ///
     /// panics if the mail type info was already added before and
     /// the added mail type info differs from the previously added
     /// type info
-    pub fn add_mail_type_info(&mut self, mail_type: MailType) {
+    pub fn with_mail_type_info(mut self, mail_type: MailType) -> Self {
         let current_mt = self.mail_type();
         if let Some(current_mail_type) = current_mt {
             if current_mail_type != mail_type {
@@ -72,39 +80,38 @@ impl EncodingError {
         } else {
             self.mail_type = Some(mail_type);
         }
+        self
     }
 }
 
 impl From<EncodingErrorKind> for EncodingError {
     fn from(ctx: EncodingErrorKind) -> Self {
-        EncodingError {
-            inner: Context::new(ctx),
-            mail_type: None
-        }
+        EncodingError::from(Context::new(ctx))
     }
 }
 
 impl From<Context<EncodingErrorKind>> for EncodingError {
     fn from(inner: Context<EncodingErrorKind>) -> Self {
         EncodingError {
-            inner, mail_type: None
+            inner,
+            mail_type: None,
+            str_context: None
         }
     }
 }
 
 impl From<(EncodingErrorKind, MailType)> for EncodingError {
     fn from((ctx, mail_type): (EncodingErrorKind, MailType)) -> Self {
-        EncodingError {
-            inner: Context::new(ctx),
-            mail_type: Some(mail_type)
-        }
+        EncodingError::from((Context::new(ctx), mail_type))
     }
 }
 
 impl From<(Context<EncodingErrorKind>, MailType)> for EncodingError {
     fn from((inner, mail_type): (Context<EncodingErrorKind>, MailType)) -> Self {
         EncodingError {
-            inner, mail_type: Some(mail_type)
+            inner,
+            mail_type: Some(mail_type),
+            str_context: None
         }
     }
 }

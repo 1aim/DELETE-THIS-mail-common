@@ -265,14 +265,10 @@ pub mod encoded_word {
                 Ok( result )
             },
             nom::IResult::Incomplete( .. ) => {
-                return Err((EncodingErrorKind::Malformed {
-                    malformkind: "encoded word does not close"
-                }, mail_type).into());
+                return Err((EncodingErrorKind::Malformed, mail_type).into());
             }
             nom::IResult::Error( .. ) => {
-                return Err((EncodingErrorKind::Malformed {
-                    malformkind: "malformed encoded word"
-                }, mail_type).into());
+                return Err((EncodingErrorKind::Malformed, mail_type).into());
             }
         }
     }

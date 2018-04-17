@@ -8,7 +8,7 @@ use grammar::is_atext;
 use ::MailType;
 use ::error::{
     EncodingError, EncodingErrorKind,
-    INVALID_NEWLINE_CHAR, UNKNOWN, UTF_8, US_ASCII
+    UNKNOWN, UTF_8, US_ASCII
 };
 
 #[cfg(feature="traceing")]
@@ -420,15 +420,17 @@ impl<'inner> EncodeHandle<'inner> {
             { self.trace.push(TraceToken::NowUtf8) }
             self.internal_write_str(s)
         } else {
-            //FEAT[extended error data]: prepend a stringy error of the line
-            // up to this call and including this lines data
-            Err(EncodingError::from((
+            let mut err = EncodingError::from((
                 EncodingErrorKind::InvalidTextEncoding {
                     expected_encoding: US_ASCII,
                     got_encoding: UTF_8
                 },
                 self.mail_type()
-            )))
+            ));
+            let mut line = self.buffer[self.line_start_idx..].to_owned();
+            line.push_str(s);
+            err.set_str_context(line);
+            Err(err)
         }
     }
 
@@ -658,7 +660,7 @@ impl<'inner> EncodeHandle<'inner> {
             } else {
                 ec_bail!(
                     mail_type: self.mail_type(),
-                    kind: Malformed { malformkind: INVALID_NEWLINE_CHAR }
+                    kind: Malformed
                 );
             }
             self.skipped_cr = false;
@@ -667,7 +669,7 @@ impl<'inner> EncodeHandle<'inner> {
             if self.skipped_cr {
                 ec_bail!(
                     mail_type: self.mail_type(),
-                    kind: Malformed { malformkind: INVALID_NEWLINE_CHAR }
+                    kind: Malformed
                 );
             }
             if ch == '\r' {

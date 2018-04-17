@@ -28,9 +28,7 @@ pub fn normal_decode<R: AsRef<[u8]>>(input: R) -> Result<Vec<u8>, EncodingError>
     extern_base64::decode_config( input.as_ref(), extern_base64::Config::new(
         CHARSET, USE_PADDING, NON_ECW_STRIP_WHITESPACE, LINE_WRAP
     )).map_err(|err| err
-        .context(EncodingErrorKind::Malformed {
-            malformkind: "not base64 data"
-        })
+        .context(EncodingErrorKind::Malformed)
         .into()
     )
 }
@@ -119,9 +117,7 @@ pub fn encoded_word_decode<R: AsRef<[u8]>>(input: R)
     extern_base64::decode_config(input.as_ref(), extern_base64::Config::new(
         CHARSET, USE_PADDING, ECW_STRIP_WHITESPACE, NO_LINE_WRAP
     )).map_err(|err| err
-        .context(EncodingErrorKind::Malformed {
-           malformkind: "not base64 encoded word"
-        })
+        .context(EncodingErrorKind::Malformed)
         .into()
     )
 }

@@ -21,9 +21,7 @@ pub fn normal_decode<R: AsRef<[u8]>>(input: R)
     extern_quoted_printable::decode(
         input.as_ref(), extern_quoted_printable::ParseMode::Strict
     ).map_err(|err| err
-        .context(EncodingErrorKind::Malformed {
-            malformkind: "not quoted-printable data"
-        })
+        .context(EncodingErrorKind::Malformed)
         .into()
     )
 }
