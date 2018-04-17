@@ -3,7 +3,6 @@
 extern crate failure;
 #[macro_use]
 extern crate nom;
-extern crate owning_ref;
 extern crate chrono;
 extern crate mime;
 extern crate soft_ascii_string;
@@ -14,7 +13,6 @@ extern crate quoted_string;
 extern crate media_type_impl_utils;
 extern crate percent_encoding;
 extern crate vec1;
-extern crate serde;
 
 //NOTE: this would be worth it's own independent crate for utility macros
 #[macro_use]
