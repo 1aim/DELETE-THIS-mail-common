@@ -758,9 +758,6 @@ impl<'a, 'b: 'a> ConditionalWriteResult<'a, 'b> {
 #[cfg(test)]
 mod test {
 
-    #[cfg(all(not(feature="traceing"), test))]
-    compile_error! { "testing needs feature `traceing` to be enabled" }
-
     use soft_ascii_string::{ SoftAsciiChar, SoftAsciiStr};
     use ::MailType;
     use ::error::{EncodingError, EncodingErrorKind};
