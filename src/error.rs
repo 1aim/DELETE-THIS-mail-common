@@ -66,12 +66,19 @@ impl EncodingError {
         self.str_context = Some(ctx.into());
     }
 
+    pub fn with_str_context<I>(mut self, ctx: I) -> Self
+        where I: Into<String>
+    {
+        self.set_str_context(ctx);
+        self
+    }
+
     /// # Panics
     ///
     /// panics if the mail type info was already added before and
     /// the added mail type info differs from the previously added
     /// type info
-    pub fn with_mail_type_info(mut self, mail_type: MailType) -> Self {
+    pub fn _with_mail_type_info(mut self, mail_type: MailType) -> Self {
         let current_mt = self.mail_type();
         if let Some(current_mail_type) = current_mt {
             if current_mail_type != mail_type {
