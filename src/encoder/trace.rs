@@ -81,13 +81,10 @@ macro_rules! ec_test {
         fn $name() {
             #![allow(unused_mut)]
             use $crate::encoder::{
-                EncodableInHeader,
-                EncodeHandle,
                 Encoder,
                 VecBodyBuf
             };
             use std::mem;
-            use $crate::error::EncodingError;
 
             let mail_type = {
                 let mt_str = stringify!($mt).to_lowercase();
@@ -108,14 +105,13 @@ macro_rules! ec_test {
             let mut encoder = Encoder::<VecBodyBuf>::new(mail_type);
             {
                 //REFACTOR(catch): use catch block once stable
-                let doit = |ec: &mut EncodeHandle| -> Result<(), EncodingError> {
-                    let input = $inp;
-                    let to_encode: &EncodableInHeader = &input;
-                    to_encode.encode(ec)?;
-                    Ok(())
-                };
+                let component = (|| -> Result<_, $crate::__FError> {
+                    let component = $inp;
+                    Ok(Box::new(component) as Box<$crate::encoder::EncodableInHeader>)
+                })().unwrap();
+
                 let mut handle = encoder.encode_handle();
-                doit(&mut handle).unwrap();
+                component.encode(&mut handle).unwrap();
                 // we do not want to finish writing as we might
                 // test just parts of headers
                 mem::forget(handle);

@@ -151,13 +151,13 @@ impl Display for EncodingError {
 macro_rules! ec_bail {
     (kind: $($tt:tt)*) => ({
         return Err($crate::error::EncodingError::from(
-            $crate::error::EncodingErrorKind:: $($tt)*))
+            $crate::error::EncodingErrorKind:: $($tt)*).into())
     });
     (mail_type: $mt:expr, kind: $($tt:tt)*) => ({
         return Err($crate::error::EncodingError::from((
             $crate::error::EncodingErrorKind:: $($tt)*,
             $mt
-        )))
+        )).into())
     });
 }
 

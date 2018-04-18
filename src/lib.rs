@@ -33,3 +33,7 @@ pub use self::mail_type::*;
 
 #[cfg(all(not(feature="traceing"), test))]
 compile_error! { "testing needs feature `traceing` to be enabled" }
+
+//reexports for exported macros
+#[doc(hidden)]
+pub use failure::Error as __FError;
