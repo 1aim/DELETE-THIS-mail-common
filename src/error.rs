@@ -13,6 +13,7 @@ pub enum EncodingErrorKind {
         expected_encoding, got_encoding)]
     InvalidTextEncoding {
         expected_encoding: &'static str,
+        //TODO[failure >= 0.2] make it Optional remove `UNKNOWN`
         got_encoding: &'static str
     },
 
@@ -73,19 +74,11 @@ impl EncodingError {
         self
     }
 
-    /// # Panics
-    ///
-    /// panics if the mail type info was already added before and
-    /// the added mail type info differs from the previously added
-    /// type info
-    pub fn _with_mail_type_info(mut self, mail_type: MailType) -> Self {
-        let current_mt = self.mail_type();
-        if let Some(current_mail_type) = current_mt {
-            if current_mail_type != mail_type {
-                panic!("[BUG] mail type info conflicting with previous added info");
-            }
-        } else {
-            self.mail_type = Some(mail_type);
+    pub fn with_mail_type_or_else<F>(mut self, func: F) -> Self
+        where F: FnOnce() -> Option<MailType>
+    {
+        if self.mail_type.is_none() {
+            self.mail_type = func();
         }
         self
     }
