@@ -45,7 +45,14 @@ pub enum EncodingErrorKind {
 pub struct EncodingError {
     inner: Context<EncodingErrorKind>,
     mail_type: Option<MailType>,
-    str_context: Option<String>
+    str_context: Option<String>,
+    place: Option<Place>
+}
+
+#[derive(Debug)]
+pub enum Place {
+    Header { name: &'static str },
+    Body
 }
 
 impl EncodingError {
@@ -74,6 +81,15 @@ impl EncodingError {
         self
     }
 
+    pub fn with_place_or_else<F>(mut self, func: F) -> Self
+        where F: FnOnce() -> Option<Place>
+    {
+        if self.place.is_none() {
+            self.place = func();
+        }
+        self
+    }
+
     pub fn with_mail_type_or_else<F>(mut self, func: F) -> Self
         where F: FnOnce() -> Option<MailType>
     {
@@ -95,7 +111,8 @@ impl From<Context<EncodingErrorKind>> for EncodingError {
         EncodingError {
             inner,
             mail_type: None,
-            str_context: None
+            str_context: None,
+            place: None
         }
     }
 }
@@ -111,7 +128,8 @@ impl From<(Context<EncodingErrorKind>, MailType)> for EncodingError {
         EncodingError {
             inner,
             mail_type: Some(mail_type),
-            str_context: None
+            str_context: None,
+            place: None
         }
     }
 }
