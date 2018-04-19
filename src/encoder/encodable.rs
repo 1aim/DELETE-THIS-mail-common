@@ -4,17 +4,7 @@ use std::result::{ Result as StdResult };
 use std::sync::Arc;
 
 use ::error::EncodingError;
-use super::{EncodeHandle, Encoder};
-use super::body::BodyBuffer;
-
-/// Trait Implemented by mainly by structs representing a mail or
-/// a part of it
-pub trait Encodable<B: BodyBuffer> {
-    //TODO potentially consume the Encoder and return a result with
-    // the data as Vec<u8> ??
-    fn encode( &self, encoder:  &mut Encoder<B>) -> Result<(), EncodingError>;
-}
-
+use super::{EncodeHandle};
 
 // can not be moved to `super::traits` as it depends on the
 // EncodeHandle defined here
