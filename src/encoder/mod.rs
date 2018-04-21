@@ -1551,8 +1551,9 @@ mod test {
             ]);
             assert_eq!(encoder.as_slice(), b"")
         }
+
         #[test]
-        fn douple_write_fws_then_long_line() {
+        fn double_write_fws_then_long_line() {
             let long_line = concat!(
                 "10_3456789",
                 "20_3456789",

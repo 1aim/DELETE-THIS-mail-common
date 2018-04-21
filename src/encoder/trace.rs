@@ -45,12 +45,11 @@ pub fn simplify_trace_tokens<I: IntoIterator<Item=TraceToken>>(inp: I) -> Vec<Tr
                 _ => true
             }
         });
-    let (min, _max) = iter.size_hint();
-    let mut out =
-        if min > 0 { Vec::with_capacity(min) }
-        else { Vec::new() };
+
+    let mut out = Vec::new();
     let mut textbf = String::new();
     let mut had_text = false;
+
     for token in iter {
         match token {
             Text(str) => {
@@ -116,8 +115,7 @@ macro_rules! ec_test {
             }
             let mut expected: Vec<$crate::encoder::TraceToken> = Vec::new();
             ec_test!{ __PRIV_TO_TOKEN_LIST expected $($tokens)* }
-            //skip over the NewSection part
-            let got = $crate::encoder::simplify_trace_tokens(encoder.trace.into_iter().skip(1));
+            let got = $crate::encoder::simplify_trace_tokens(encoder.trace.into_iter());
             assert_eq!(got, expected)
         }
     );
@@ -143,4 +141,27 @@ macro_rules! ec_test {
 //            "syntax error in token list: ", stringify!($($other:tt)*)
 //        ))
 //    )
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use soft_ascii_string::SoftAsciiStr;
+    use super::super::encodable::EncodeClosure;
+
+    ec_test!{ repreduces_all_tokens,
+        {
+            EncodeClosure::new(|writer| {
+                writer.write_utf8("hy-there")?;
+                writer.write_fws();
+                writer.write_str(SoftAsciiStr::from_str_unchecked("tshau-there"))?;
+                Ok(())
+            })
+        } => utf8 => [
+            Text "hy-there",
+            MarkFWS,
+            Text " tshau-there"
+        ]
+    }
 }
