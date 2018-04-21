@@ -1,4 +1,4 @@
-/// If it is a test build the Encoder will
+/// If it is a test build the EncodingBuffer will
 /// have an additional `pub trace` field,
 /// which will contain a Vector of `Token`s
 /// generated when writing to the string buffer.
@@ -81,7 +81,7 @@ macro_rules! ec_test {
         #[test]
         fn $name() {
             #![allow(unused_mut)]
-            use $crate::encoder::Encoder;
+            use $crate::encoder::EncodingBuffer;
             use std::mem;
 
             let mail_type = {
@@ -100,7 +100,7 @@ macro_rules! ec_test {
                 }
             };
 
-            let mut encoder = Encoder::new(mail_type);
+            let mut encoder = EncodingBuffer::new(mail_type);
             {
                 //REFACTOR(catch): use catch block once stable
                 let component = (|| -> Result<_, $crate::__FError> {
@@ -108,7 +108,7 @@ macro_rules! ec_test {
                     Ok(Box::new(component) as Box<$crate::encoder::EncodableInHeader>)
                 })().unwrap();
 
-                let mut handle = encoder.encode_handle();
+                let mut handle = encoder.writer();
                 component.encode(&mut handle).unwrap();
                 // we do not want to finish writing as we might
                 // test just parts of headers

@@ -2,7 +2,7 @@ use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar, SoftAsciiStr };
 
 use vec1::Vec1;
 use grammar::encoded_word::{ MAX_ECW_LEN, ECW_SEP_OVERHEAD };
-use ::encoder::EncodeHandle;
+use ::encoder::EncodingWriter;
 use super::{ EncodedWordWriter, EncodedWordEncoding as Encoding };
 
 pub struct VecWriter<'a> {
@@ -54,19 +54,19 @@ impl<'a> EncodedWordWriter for VecWriter<'a> {
 pub struct WriterWrapper<'a, 'b: 'a>{
     charset: &'a SoftAsciiStr,
     encoding: Encoding,
-    encoder_handle: &'a mut EncodeHandle<'b>
+    encoder_handle: &'a mut EncodingWriter<'b>
 }
 
 impl<'a, 'b: 'a> WriterWrapper<'a, 'b> {
     pub fn new_with_charset(charset: &'a SoftAsciiStr,
                             encoding: Encoding,
-                            encoder: &'a mut EncodeHandle<'b> ) -> Self
+                            encoder: &'a mut EncodingWriter<'b> ) -> Self
     {
         WriterWrapper { charset, encoding, encoder_handle: encoder }
     }
 
     pub fn new(encoding: Encoding,
-               encoder: &'a mut EncodeHandle<'b> ) -> Self
+               encoder: &'a mut EncodingWriter<'b> ) -> Self
     {
         Self::new_with_charset(SoftAsciiStr::from_str_unchecked("utf8"), encoding, encoder)
     }

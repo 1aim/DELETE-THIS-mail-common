@@ -4,16 +4,16 @@ use std::result::{ Result as StdResult };
 use std::sync::Arc;
 
 use ::error::EncodingError;
-use super::{EncodeHandle};
+use super::{EncodingWriter};
 
 // can not be moved to `super::traits` as it depends on the
-// EncodeHandle defined here
+// EncodingWriter defined here
 /// Trait Implemented by "components" used in header field bodies
 ///
 /// This trait can be turned into a trait object allowing runtime
 /// genericallity over the "components" if needed.
 pub trait EncodableInHeader: Send + Sync + Any + Debug {
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<(), EncodingError>;
+    fn encode(&self, encoder:  &mut EncodingWriter) -> Result<(), EncodingError>;
 
     fn boxed_clone(&self) -> Box<EncodableInHeader>;
 
@@ -89,17 +89,17 @@ impl EncodableInHeaderBoxExt for Box<EncodableInHeader+Send> {
 
 #[macro_export]
 macro_rules! enc_func {
-    (|$enc:ident : &mut EncodeHandle| $block:block) => ({
+    (|$enc:ident : &mut EncodingWriter| $block:block) => ({
         use $crate::error::EncodingError;
-        fn _anonym($enc: &mut EncodeHandle) -> Result<(), EncodingError> {
+        fn _anonym($enc: &mut EncodingWriter) -> Result<(), EncodingError> {
             $block
         }
-        let fn_pointer = _anonym as fn(&mut EncodeHandle) -> Result<(), EncodingError>;
+        let fn_pointer = _anonym as fn(&mut EncodingWriter) -> Result<(), EncodingError>;
         $crate::encoder::EncodeFn::new(fn_pointer)
     });
 }
 
-type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>;
+type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
 
 #[derive(Clone, Copy)]
 pub struct EncodeFn(_EncodeFn);
@@ -111,7 +111,7 @@ impl EncodeFn {
 }
 
 impl EncodableInHeader for EncodeFn {
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<(), EncodingError> {
+    fn encode(&self, encoder:  &mut EncodingWriter) -> Result<(), EncodingError> {
         (self.0)(encoder)
     }
 
@@ -135,11 +135,11 @@ macro_rules! enc_closure {
 
 pub struct EncodeClosure<FN: 'static>(Arc<FN>)
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>;
+        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
 
 impl<FN: 'static> EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>
+        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     pub fn new(closure: FN) -> Self {
         EncodeClosure(Arc::new(closure))
@@ -148,9 +148,9 @@ impl<FN: 'static> EncodeClosure<FN>
 
 impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>
+        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
-    fn encode(&self, encoder:  &mut EncodeHandle) -> Result<(), EncodingError> {
+    fn encode(&self, encoder:  &mut EncodingWriter) -> Result<(), EncodingError> {
         (self.0)(encoder)
     }
 
@@ -161,7 +161,7 @@ impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
 
 impl<FN: 'static> Clone for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>
+        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     fn clone(&self) -> Self {
         EncodeClosure(self.0.clone())
@@ -171,7 +171,7 @@ impl<FN: 'static> Clone for EncodeClosure<FN>
 
 impl<FN: 'static> Debug for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodeHandle<'b>) -> Result<(), EncodingError>
+        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
         write!(fter, "EncodeClosure(..)")
