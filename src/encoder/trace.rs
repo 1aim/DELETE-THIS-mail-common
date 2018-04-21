@@ -26,7 +26,8 @@ pub enum TraceToken {
     /// contains the Payload, so e.g. headers from
     /// mime bodies or mime multipart body boundaries
     /// still get written into the string buffer
-    BlankLine
+    BlankLine,
+    Body
 }
 
 pub fn simplify_trace_tokens<I: IntoIterator<Item=TraceToken>>(inp: I) -> Vec<TraceToken> {
@@ -80,10 +81,7 @@ macro_rules! ec_test {
         #[test]
         fn $name() {
             #![allow(unused_mut)]
-            use $crate::encoder::{
-                Encoder,
-                VecBodyBuf
-            };
+            use $crate::encoder::Encoder;
             use std::mem;
 
             let mail_type = {
@@ -102,7 +100,7 @@ macro_rules! ec_test {
                 }
             };
 
-            let mut encoder = Encoder::<VecBodyBuf>::new(mail_type);
+            let mut encoder = Encoder::new(mail_type);
             {
                 //REFACTOR(catch): use catch block once stable
                 let component = (|| -> Result<_, $crate::__FError> {

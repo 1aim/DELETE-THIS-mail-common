@@ -5,6 +5,10 @@ use failure::Fail;
 use soft_ascii_string::{SoftAsciiStr, SoftAsciiChar};
 
 use grammar::is_atext;
+use ::utils::{
+    is_utf8_continuation_byte,
+    vec_insert_bytes
+};
 use ::MailType;
 use ::error::{
     EncodingError, EncodingErrorKind,
@@ -34,19 +38,19 @@ pub const LINE_LEN_HARD_LIMIT: usize = 998;
 /// The buffer is a vector of section which either are string
 /// buffers used to mainly encode headers or buffers of type R:BodyBuffer
 /// which represent a valid body payload.
-pub struct Encoder<R: BodyBuffer> {
+pub struct Encoder {
     mail_type: MailType,
-    sections: Vec<Section<R>>,
+    buffer: Vec<u8>,
     #[cfg(feature="traceing")]
     pub trace: Vec<TraceToken>
 }
 
-impl<B: BodyBuffer> Encoder<B> {
+impl Encoder {
 
     pub fn new(mail_type: MailType) -> Self {
         Encoder {
             mail_type,
-            sections: Default::default(),
+            buffer: Vec::new(),
             #[cfg(feature="traceing")]
             trace: Vec::new()
         }
@@ -59,26 +63,14 @@ impl<B: BodyBuffer> Encoder<B> {
     /// returns a new EncodeHandle which contains
     /// a mutable reference to the current string buffer
     ///
-    /// # Trace (test build only)
-    /// pushes a `NewSection` Token if the the returned
-    /// `EncodeHandle` refers to a new empty buffer
     pub fn encode_handle(&mut self ) -> EncodeHandle {
-        if let Some(&Section::String(..)) = self.sections.last() {}
-        else {
-            self.sections.push(Section::String(String::new()));
-            #[cfg(feature="traceing")]
-            { self.trace.push(TraceToken::NewSection) }
+        #[cfg(not(feature="traceing"))]
+        {
+            EncodeHandle::new(self.mail_type, &mut self.buffer)
         }
-
-        if let Some(&mut Section::String(ref mut string)) = self.sections.last_mut() {
-            #[cfg(not(feature="traceing"))]
-            { EncodeHandle::new(self.mail_type, string) }
-            #[cfg(feature="traceing")]
-            { EncodeHandle::new(self.mail_type, string, &mut self.trace) }
-        } else {
-            //FIXME[rust/nll]: with NLL we probably can combine both if-else blocks,
-            // not needing unreachable! anymore
-            unreachable!("we already made sure the last is Section::Header")
+        #[cfg(feature="traceing")]
+        {
+            EncodeHandle::new(self.mail_type, &mut self.buffer, &mut self.trace)
         }
     }
 
@@ -106,111 +98,84 @@ impl<B: BodyBuffer> Encoder<B> {
 
     }
 
-    pub fn add_blank_line(&mut self) {
-        if let Some(&Section::String(..)) = self.sections.last() {}
-            else {
-                self.sections.push(Section::String(String::new()));
-                #[cfg(feature="traceing")]
-                { self.trace.push(TraceToken::NewSection); }
+    pub fn write_blank_line(&mut self) {
+        //TODO/BENCH push_str vs. extends(&[u8])
+        self.buffer.extend("\r\n".as_bytes());
+        #[cfg(feature="traceing")]
+        { self.trace.push(TraceToken::BlankLine); }
+    }
+
+    /// writes a body to the internal buffer, without verifying it's correctness
+    pub fn write_body_unchecked<B: BodyBuffer>(&mut self, body: &B) -> Result<(), EncodingError> {
+        body.with_slice(|slice| {
+            self.buffer.extend(slice);
+            if !slice.ends_with(b"\r\n") {
+                self.buffer.extend(b"\r\n");
             }
-
-        if let Some(&mut Section::String(ref mut string)) = self.sections.last_mut() {
-            string.push_str("\r\n");
-            #[cfg(feature="traceing")]
-            { self.trace.push(TraceToken::BlankLine); }
-        } else {
-            //REFACTOR(NLL): with NLL we can combine both if-else blocks not needing unreachable! anymore
-            unreachable!("we already made sure the last is Section::Header")
-        }
+            Ok(())
+        })
     }
 
-    /// adds adds a body payload buffer to the encoder
-    /// without validating it, the encoder mainly provides
-    /// buffers it is not validating them.
-    pub fn add_body(&mut self, body: B) {
-        self.sections.push(Section::BodyPayload(body))
-    }
-
-    pub fn into_sections(self) -> Vec<Section<B>> {
-        self.sections
-    }
-
-
-    /// # Error
-    ///
-    /// This can fail if a call to `BodyBuffer::with_slice` fails
-    /// (e.g. because it referred to a shared resource which was invalidated)
-    ///
-    pub fn to_vec(&self) -> Result<Vec<u8>, EncodingError> {
-        let mut out = Vec::new();
-        for section in self.sections.iter() {
-            match *section {
-                Section::String(ref string) => out.extend(string.bytes()),
-                Section::BodyPayload(ref body) => {
-                    body.with_slice(|slice| {
-                        out.extend(slice);
-                        if !slice.ends_with(b"\r\n") {
-                            out.extend(b"\r\n")
-                        }
-                        Ok(())
-                    })?
-                }
-            }
-        }
-        Ok(out)
-    }
+    //TODO impl. a alt. `write_body(body,  boundaries)` which:
+    // - checks the body (us-ascii or mime8bit/internationalized)
+    // - checks for orphan '\r'/'\n' and 0 bytes
+    // - check that no string in boundaries appears in the text
+    //   - this probably requires creating a regex for each body
+    //     through as boundaries are "fixed" there might be an more
+    //     efficient algorithm then a regex (i.e. using tries)
 
     /// # Error
     ///
     /// This can fail if a body does not contain valid utf8, or
     /// if `BodyBuffer::with_slice` fails (e.g. because it referred
     /// to a shared resource which was invalidated)
+    pub fn as_str(&self) -> Result<&str, EncodingError> {
+        str::from_utf8(self.buffer.as_slice())
+            .map_err(|err| {
+                EncodingError::from((
+                    err.context(EncodingErrorKind::InvalidTextEncoding {
+                        expected_encoding: UTF_8,
+                        got_encoding: UNKNOWN
+                    }),
+                    self.mail_type()
+                ))
+            })
+    }
+
     pub fn to_string(&self) -> Result<String, EncodingError> {
-        self._to_string(|slice| match str::from_utf8(slice) {
-            Ok(str_slice) => Ok(Cow::Borrowed(str_slice)),
-            Err(err) => Err(EncodingError::from((
-                err.context(EncodingErrorKind::InvalidTextEncoding {
-                    expected_encoding: UTF_8,
-                    got_encoding: UNKNOWN
-                }),
-                self.mail_type()
-            )))
-        })
+        Ok(self.as_str()?.to_owned())
     }
 
-    /// # Error
-    ///
-    /// This can fail if a call to `BodyBuffer::with_slice` fails
-    /// (e.g. because it referred to a shared resource which was invalidated)
-    ///
-    pub fn to_string_lossy(&self) -> Result<String, EncodingError> {
-        self._to_string(|slice| Ok(String::from_utf8_lossy(slice)))
+    pub fn to_string_lossy(&self) -> Cow<str> {
+        String::from_utf8_lossy(self.buffer.as_slice())
     }
 
-    fn _to_string<F>(&self, mut bodyslice2string: F) -> Result<String, EncodingError>
-        where F: FnMut(&[u8]) -> Result<Cow<str>, EncodingError>
-    {
-        let mut out = String::new();
-        for section in self.sections.iter() {
-            match *section {
-                Section::String(ref string) => { out.push_str(&*string); }
-                Section::BodyPayload(ref body) => {
-                    body.with_slice(|slice| {
-                        let text = bodyslice2string(slice)?;
-                        out.push_str(&*text);
-                        if !text.ends_with("\r\n") {
-                            out.push_str("\r\n");
-                        }
-                        Ok(())
-                    })?
-                }
-            }
-        }
-        Ok(out)
+    pub fn as_slice(&self) -> &[u8] {
+        &self.buffer
     }
 
 }
 
+
+impl Into<Vec<u8>> for Encoder {
+    fn into(self) -> Vec<u8> {
+        self.buffer
+    }
+}
+
+impl Into<(MailType, Vec<u8>)> for Encoder {
+    fn into(self) -> (MailType, Vec<u8>) {
+        (self.mail_type, self.buffer)
+    }
+}
+
+#[cfg(feature="traceing")]
+impl Into<(MailType, Vec<u8>, Vec<TraceToken>)> for Encoder {
+    fn into(self) -> (MailType, Vec<u8>, Vec<TraceToken>) {
+        let Encoder { mail_type, buffer, trace } = self;
+        (mail_type, buffer, trace)
+    }
+}
 
 /// A handle providing method to write to the underlying buffer
 /// keeping track of newlines the current line length and places
@@ -230,7 +195,7 @@ impl<B: BodyBuffer> Encoder<B> {
 ///
 ///
 pub struct EncodeHandle<'a> {
-    buffer: &'a mut String,
+    buffer: &'a mut Vec<u8>,
     #[cfg(feature="traceing")]
     trace: &'a mut Vec<TraceToken>,
     mail_type: MailType,
@@ -268,7 +233,7 @@ impl<'inner> EncodeHandle<'inner> {
     #[cfg(not(feature="traceing"))]
     fn new(
         mail_type: MailType,
-        buffer: &'inner mut String,
+        buffer: &'inner mut Vec<u8>,
     ) -> Self {
         let start_idx = buffer.len();
         EncodeHandle {
@@ -286,7 +251,7 @@ impl<'inner> EncodeHandle<'inner> {
     #[cfg(feature="traceing")]
     fn new(
         mail_type: MailType,
-        buffer: &'inner mut String,
+        buffer: &'inner mut Vec<u8>,
         trace: &'inner mut Vec<TraceToken>
     ) -> Self {
         let start_idx = buffer.len();
@@ -362,7 +327,10 @@ impl<'inner> EncodeHandle<'inner> {
     pub fn write_char(&mut self, ch: SoftAsciiChar) -> Result<(), EncodingError>  {
         #[cfg(feature="traceing")]
         { self.trace.push(TraceToken::NowChar) }
-        self.internal_write_char(ch.into())
+        let mut buffer = [0xff_u8; 4];
+        let ch: char = ch.into();
+        let slice = ch.encode_utf8(&mut buffer);
+        self.internal_write_char(slice)
     }
 
     /// writes a ascii str to the underlying buffer
@@ -427,7 +395,8 @@ impl<'inner> EncodeHandle<'inner> {
                 },
                 self.mail_type()
             ));
-            let mut line = self.buffer[self.line_start_idx..].to_owned();
+            let raw_line = &self.buffer[self.line_start_idx..];
+            let mut line = String::from_utf8_lossy(raw_line).into_owned();
             line.push_str(s);
             err.set_str_context(line);
             Err(err)
@@ -595,9 +564,24 @@ impl<'inner> EncodeHandle<'inner> {
     /// little sense for the use case the generally available
     /// `undo_header` is enough.
     fn internal_write_str(&mut self, s: &str)  -> Result<(), EncodingError>  {
-        for ch in s.chars() {
-            self.internal_write_char(ch)?
+        if s.is_empty() {
+            return Ok(());
         }
+        //TODO I think I wrote a iterator for this somewhere
+        let mut start = 0;
+        // the first byte is never a continuation byte so we start
+        // scanning at the second byte
+        for (idx_m1, bch) in s.as_bytes()[1..].iter().enumerate() {
+            if !is_utf8_continuation_byte(*bch) {
+                // the idx is 1 smaller then it should so add 1
+                let end = idx_m1 + 1;
+                self.internal_write_char(&s[start..end])?;
+                start = end;
+            }
+        }
+
+        //write last letter
+        self.internal_write_char(&s[start..])?;
         Ok(())
     }
 
@@ -610,8 +594,8 @@ impl<'inner> EncodeHandle<'inner> {
             #[cfg(feature="traceing")]
             { self.trace.push(TraceToken::CRLF) }
 
-            self.buffer.push('\r');
-            self.buffer.push('\n');
+            self.buffer.push(b'\r');
+            self.buffer.push(b'\n');
         } else {
             #[cfg(feature="traceing")]
             {
@@ -636,11 +620,12 @@ impl<'inner> EncodeHandle<'inner> {
         if self.content_before_fws && self.last_fws_idx > self.line_start_idx {
             //INDEX_SAFE: self.content_before_fws is only true if there is at last one char
             // if so self.last_ws_idx does not point at the end of the buffer but inside
-            let newline = match self.buffer.as_bytes()[self.last_fws_idx] {
+            let newline = match self.buffer[self.last_fws_idx] {
                 b' ' | b'\t' => "\r\n",
                 _ => "\r\n "
             };
-            self.buffer.insert_str(self.last_fws_idx, newline);
+
+            vec_insert_bytes(&mut self.buffer, self.last_fws_idx, newline.as_bytes());
             self.line_start_idx = self.last_fws_idx + 2;
             // no need last_fws can be < line_start but
             //self.last_fws_idx = self.line_start_idx;
@@ -653,8 +638,26 @@ impl<'inner> EncodeHandle<'inner> {
         }
     }
 
-    fn internal_write_char(&mut self, ch: char) -> Result<(), EncodingError> {
-        if ch == '\n' {
+    /// # Constraints
+    ///
+    /// `unchecked_utf8_char` is expected to be exactly
+    /// one char, which means it's 1-4 bytes in length.
+    ///
+    /// The reason why a slice is expected instead of a
+    /// char is, that this function will at some point push
+    /// to a byte buffer requiring a `&[u8]` and many function
+    /// calling this function can directly produce a &[u8]/&str.
+    ///
+    /// # Panic
+    ///
+    /// Panics if `unchecked_utf8_char` is empty.
+    /// If debug assertions are enabled it also panics, if
+    /// unchecked_utf8_char is more than just one char.
+    fn internal_write_char(&mut self, unchecked_utf8_char: &str) -> Result<(), EncodingError> {
+        debug_assert_eq!(unchecked_utf8_char.chars().count(), 1);
+
+        let bch = unchecked_utf8_char.as_bytes()[0];
+        if bch == b'\n' {
             if self.skipped_cr {
                 self.start_new_line()
             } else {
@@ -672,7 +675,7 @@ impl<'inner> EncodeHandle<'inner> {
                     kind: Malformed
                 );
             }
-            if ch == '\r' {
+            if bch == b'\r' {
                 self.skipped_cr = true;
                 return Ok(());
             } else {
@@ -691,27 +694,27 @@ impl<'inner> EncodeHandle<'inner> {
             }
         }
 
-        self.buffer.push(ch);
+        self.buffer.extend(unchecked_utf8_char.as_bytes());
         #[cfg(feature="traceing")]
         {
             //FIXME[rust/nll]: just use a `if let`-`else` with NLL's
             let need_new =
                 if let Some(&mut TraceToken::Text(ref mut string)) = self.trace.last_mut() {
-                    string.push(ch);
+                    string.push_str(unchecked_utf8_char);
                     false
                 } else {
                     true
                 };
             if need_new {
                 let mut string = String::new();
-                string.push(ch);
+                string.push_str(unchecked_utf8_char);
                 self.trace.push(TraceToken::Text(string))
             }
 
         }
 
         // we can't allow "blank" lines
-        if ch != ' ' && ch != '\t' {
+        if bch != b' ' && bch != b'\t' {
             // if there is no fws this is equiv to line_has_content
             // else line_has_content = self.content_before_fws|self.content_since_fws
             self.content_since_fws = true;
@@ -765,12 +768,7 @@ mod test {
     use ::error::{EncodingError, EncodingErrorKind};
 
     use super::TraceToken::*;
-    use super::{
-        BodyBuffer,
-        Section,
-    };
-
-    type _Encoder = super::Encoder<VecBody>;
+    use super::{BodyBuffer, Encoder as _Encoder};
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     struct VecBody {
@@ -778,9 +776,8 @@ mod test {
     }
 
     impl VecBody {
-        fn new(unique_part: u8) -> Self {
-            let data = (0..unique_part).map(|x| x as u8).collect();
-            VecBody { data }
+        fn new(content: &str) -> Self {
+            VecBody { data: content.as_bytes().to_owned() }
         }
     }
 
@@ -882,7 +879,6 @@ mod test {
     mod EncodableInHeader {
         #![allow(non_snake_case)]
         use super::super::*;
-        use super::VecBody;
         use self::TraceToken::*;
 
         #[test]
@@ -891,14 +887,13 @@ mod test {
                 handle.write_utf8("hy ho")
             });
 
-            let mut encoder = Encoder::<VecBody>::new(MailType::Internationalized);
+            let mut encoder = Encoder::new(MailType::Internationalized);
             {
                 let mut handle = encoder.encode_handle();
                 assert_ok!(closure.encode(&mut handle));
                 handle.finish_header();
             }
             assert_eq!(encoder.trace.as_slice(), &[
-                NewSection,
                 NowUtf8,
                 Text("hy ho".into()),
                 CRLF,
@@ -920,40 +915,23 @@ mod test {
         }
 
         #[test]
-        fn writing_bodies() {
+        fn write_body_unchecked() {
             let mut encoder = Encoder::new(MailType::Ascii);
-            let body1 = VecBody::new(0);
-            encoder.add_body(body1.clone());
-            let body2 = VecBody::new(5);
-            encoder.add_body(body2.clone());
+            let body1 = VecBody::new("una body\r\n");
+            let body2 = VecBody::new("another body");
 
-            let res = encoder
-                .into_sections()
-                .into_iter()
-                .map(|s| match s {
-                    Section::String(..) => panic!("we only added bodies"),
-                    Section::BodyPayload(body) => body
-                })
-                .collect::<Vec<_>>();
+            encoder.write_body_unchecked(&body1).unwrap();
+            encoder.write_blank_line();
+            encoder.write_body_unchecked(&body2).unwrap();
 
-            let expected = vec![ body1, body2 ];
-
-            assert_eq!(res, expected);
-        }
-
-        #[test]
-        fn to_vec() {
-            let mut encoder = Encoder::new(MailType::Ascii);
-            {
-                let mut handle = encoder.encode_handle();
-                handle.write_str_unchecked("A: B").unwrap();
-                handle.finish_header();
-            }
-            let body1 = VecBody::new(4);
-            encoder.add_body(body1.clone());
-
-            let data = encoder.to_vec().unwrap();
-            assert_eq!(data, b"A: B\r\n\x00\x01\x02\x03\r\n");
+            assert_eq!(
+                encoder.as_slice(),
+                concat!(
+                    "una body\r\n",
+                    "\r\n",
+                    "another body\r\n"
+                ).as_bytes()
+            )
         }
     }
 
@@ -974,9 +952,7 @@ mod test {
                     handle.write_str(SoftAsciiStr::from_str_unchecked("Header-One: 12")));
                 handle.undo_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from(""));
+            assert_eq!(encoder.as_slice(), b"");
         }
 
         #[test]
@@ -989,9 +965,7 @@ mod test {
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("ups: sa").unwrap()));
                 handle.undo_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12\r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12\r\n");
         }
 
         #[test]
@@ -1002,9 +976,7 @@ mod test {
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("Header-One: 12").unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12\r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12\r\n");
         }
 
         #[test]
@@ -1015,9 +987,7 @@ mod test {
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("Header-One: 12\r\n").unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12\r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12\r\n");
         }
 
         #[test]
@@ -1028,9 +998,7 @@ mod test {
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("Header-One: 12\r\n   ").unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12\r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12\r\n");
         }
 
 
@@ -1042,9 +1010,7 @@ mod test {
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("Header-One: 12 +\r\n 4").unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12 +\r\n 4\r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12 +\r\n 4\r\n");
         }
 
         #[test]
@@ -1056,9 +1022,7 @@ mod test {
                     SoftAsciiStr::from_str("Header-One: 12 +\r\n 4  ").unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("Header-One: 12 +\r\n 4  \r\n"));
+            assert_eq!(encoder.as_slice(), b"Header-One: 12 +\r\n 4  \r\n");
         }
 
 
@@ -1101,10 +1065,7 @@ mod test {
                 //a \r\n anyway
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("H: a\r\n"));
-
+            assert_eq!(encoder.as_slice(), b"H: a\r\n");
         }
 
         #[test]
@@ -1125,9 +1086,9 @@ mod test {
                 )).unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(&*last, concat!(
+            assert_eq!(
+                encoder.as_str().unwrap(),
+                concat!(
                     "A23456789:\r\n ",
                     "20_3456789",
                     "30_3456789",
@@ -1136,7 +1097,8 @@ mod test {
                     "60_3456789",
                     "70_3456789",
                     "12345678XX\r\n"
-                ));
+                )
+            );
         }
 
         #[test]
@@ -1157,9 +1119,10 @@ mod test {
                 )).unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(&*last, concat!(
+
+            assert_eq!(
+                encoder.as_str().unwrap(),
+                concat!(
                     "A23456789:\r\n\t",
                     "20_3456789",
                     "30_3456789",
@@ -1168,7 +1131,8 @@ mod test {
                     "60_3456789",
                     "70_3456789",
                     "12345678XX\r\n"
-                ));
+                )
+            );
         }
 
 
@@ -1193,9 +1157,9 @@ mod test {
                 )).unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(&*last, concat!(
+            assert_eq!(
+                encoder.as_str().unwrap(),
+                concat!(
                     "A23456789:\r\n ",
                     "10_3456789",
                     "20_3456789",
@@ -1207,7 +1171,8 @@ mod test {
                     "80_3456789",
                     "90_3456789",
                     "00_3456789\r\n",
-                ));
+                )
+            );
         }
 
         #[test]
@@ -1235,9 +1200,9 @@ mod test {
                 )).unwrap()));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(&*last, concat!(
+            assert_eq!(
+                encoder.as_str().unwrap(),
+                concat!(
                     "A23456789:\r\n ",
                     "10_3456789",
                     "20_3456789",
@@ -1250,7 +1215,8 @@ mod test {
                     "20_3456789",
                     "30_3456789",
                     "40_3456789\r\n",
-                ));
+                )
+            );
         }
 
         #[test]
@@ -1304,9 +1270,7 @@ mod test {
                 assert_ok!(handle.write_utf8("❤"));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("❤\r\n"));
+            assert_eq!(encoder.as_str().unwrap(), "❤\r\n");
         }
 
         #[test]
@@ -1324,9 +1288,7 @@ mod test {
                     .handle_condition_failure(|_|panic!("no condition failur expected")));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("hoho\r\n"));
+            assert_eq!(encoder.as_slice(), b"hoho\r\n");
         }
 
         #[test]
@@ -1344,9 +1306,7 @@ mod test {
                     .handle_condition_failure(|_|panic!("no condition failur expected")));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("hoho❤\r\n"));
+            assert_eq!(encoder.as_str().unwrap(), "hoho❤\r\n");
         }
 
         #[test]
@@ -1367,9 +1327,7 @@ mod test {
                 handle.finish_header();
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("hoho❤\r\n"));
+            assert_eq!(encoder.as_str().unwrap(), "hoho❤\r\n");
         }
 
         #[test]
@@ -1384,9 +1342,7 @@ mod test {
                 handle.undo_header();
                 handle.undo_header();
             }
-            assert_eq!(encoder.sections.len(), 1);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from(""));
+            assert_eq!(encoder.as_slice(), b"");
         }
 
         #[test]
@@ -1397,20 +1353,20 @@ mod test {
                 assert_ok!(handle.write_utf8("H: yay"));
                 handle.finish_header();
             }
-            let body = VecBody::new(3);
-            encoder.add_body(body.clone());
+            encoder.write_body_unchecked(&VecBody::new("da body")).unwrap();
             {
                 let mut handle = encoder.encode_handle();
                 assert_ok!(handle.write_utf8("❤"));
                 handle.finish_header();
             }
-            assert_eq!(encoder.sections.len(), 3);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("❤\r\n"));
-            let last = encoder.sections.pop().unwrap().unwrap_body();
-            assert_eq!(last, body);
-            let last = encoder.sections.pop().unwrap().unwrap_header();
-            assert_eq!(last, String::from("H: yay\r\n"));
+            assert_eq!(
+                encoder.as_slice(),
+                concat!(
+                    "H: yay\r\n",
+                    "da body\r\n",
+                    "❤\r\n"
+                ).as_bytes()
+            );
         }
 
         #[test]
@@ -1473,7 +1429,7 @@ mod test {
                 assert_ok!(handle.write_utf8("<else>"));
                 handle.undo_header();
             }
-            assert_eq!(encoder.trace.len(), 1);
+            assert_eq!(encoder.trace.len(), 0);
         }
 
         #[test]
@@ -1489,7 +1445,6 @@ mod test {
                 handle.undo_header();
             }
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 NowUtf8,
                 Text("H: a".into()),
                 CRLF,
@@ -1515,7 +1470,6 @@ mod test {
                 handle.finish_header()
             }
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 NowStr,
                 Text("Header".into()),
                 NowChar,
@@ -1542,8 +1496,8 @@ mod test {
                 Err(EncodingErrorKind::Other { kind: "error ;=)" }.into())
             });
             assert_err!(res);
-            assert_eq!(encoder.trace, vec![NewSection]);
-            assert_eq!(encoder.sections, vec![Section::String("".into())]);
+            assert_eq!(encoder.trace, vec![]);
+            assert_eq!(encoder.as_slice(), b"");
         }
 
         #[test]
@@ -1554,15 +1508,12 @@ mod test {
             });
             assert_ok!(res);
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 NowUtf8,
                 Text("X-A: 12".into()),
                 CRLF,
                 End
             ]);
-            assert_eq!(encoder.sections, vec![
-                Section::String("X-A: 12\r\n".into())
-            ])
+            assert_eq!(encoder.as_slice(), b"X-A: 12\r\n");
         }
 
         #[test]
@@ -1575,15 +1526,12 @@ mod test {
             });
             assert_ok!(res);
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 NowUtf8,
                 Text("X-A: 12".into()),
                 CRLF,
                 End,
             ]);
-            assert_eq!(encoder.sections, vec![
-                Section::String("X-A: 12\r\n".into())
-            ])
+            assert_eq!(encoder.as_slice(), b"X-A: 12\r\n")
         }
 
         #[test]
@@ -1596,15 +1544,12 @@ mod test {
             });
             assert_ok!(res);
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 MarkFWS, NowChar, Text(" ".to_owned()),
                 MarkFWS, NowChar, Text(" ".to_owned()),
                 TruncateToCRLF,
                 End
             ]);
-            assert_eq!(encoder.sections, vec![
-                Section::String("".to_owned())
-            ])
+            assert_eq!(encoder.as_slice(), b"")
         }
         #[test]
         fn douple_write_fws_then_long_line() {
@@ -1627,16 +1572,13 @@ mod test {
             });
             assert_ok!(res);
             assert_eq!(encoder.trace, vec![
-                NewSection,
                 MarkFWS, NowChar, Text(" ".to_owned()),
                 MarkFWS, NowChar, Text(" ".to_owned()),
                 NowUtf8, Text(long_line.to_owned()),
                 CRLF,
                 End
             ]);
-            assert_eq!(encoder.sections, vec![
-                Section::String(format!("  {}\r\n", long_line))
-            ])
+            assert_eq!(encoder.as_slice(), format!("  {}\r\n", long_line).as_bytes())
         }
     }
 

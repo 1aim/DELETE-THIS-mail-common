@@ -97,4 +97,37 @@ pub fn uneraser_mut<GOT: 'static, EXP: 'static>(inp: &mut GOT ) -> Option<&mut E
 
 
 
+/// returns true if this a not first byte from a multi byte utf-8
+///
+/// This will return false:
+/// - on all us-ascii  chars (as u8)
+/// - on the first byte of a multi-byte utf-8 char
+///
+pub fn is_utf8_continuation_byte(b: u8) -> bool {
+    // all additional bytes (and only them) in utf8 start with 0b10xxxxxx so while
+    (b & 0b11000000) == 0b10000000
+}
 
+pub fn vec_insert_bytes(target: &mut Vec<u8>, idx: usize, source: &[u8]) {
+    use std::ptr::copy;
+
+    let old_len = target.len();
+    let insertion_len = source.len();
+    let source_ptr = source.as_ptr();
+    let insertion_point = unsafe { target.as_mut_ptr().offset(idx as isize) };
+    let moved_data_len = old_len - idx;
+
+    //1. reserve more storage
+    target.reserve(insertion_len);
+
+    unsafe {
+        //2. move all bytes after the insertion point `amount` bytes to the right
+        copy(insertion_point, insertion_point.offset(insertion_len as isize), moved_data_len);
+
+        //3. copy data from source into the freed region
+        copy(source_ptr, insertion_point, insertion_len);
+
+        //3. set the new len for the vec
+        target.set_len(old_len + insertion_len)
+    }
+}

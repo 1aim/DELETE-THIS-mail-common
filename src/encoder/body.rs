@@ -47,28 +47,3 @@ impl BodyBuffer for VecBodyBuf {
         func(self.0.as_slice())
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Section<R: BodyBuffer> {
-    String(String),
-    BodyPayload(R)
-}
-
-impl<R> Section<R>
-    where R: BodyBuffer
-{
-    pub fn unwrap_header(self) -> String {
-        if let Section::String(res) = self {
-            res
-        } else {
-            panic!("expected `Section::Header` got `Section::Body`")
-        }
-    }
-    pub fn unwrap_body(self) -> R {
-        if let Section::BodyPayload(res) = self {
-            res
-        } else {
-            panic!("expected `Section::MIMEBody` got `Section::Header`")
-        }
-    }
-}

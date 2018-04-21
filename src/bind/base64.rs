@@ -2,7 +2,9 @@ use {base64 as extern_base64};
 use soft_ascii_string::{ SoftAsciiString, SoftAsciiChar};
 use failure::Fail;
 
+use ::utils::is_utf8_continuation_byte;
 use ::error::{EncodingError, EncodingErrorKind};
+
 use super::encoded_word::EncodedWordWriter;
 
 const CHARSET: extern_base64::CharacterSet = extern_base64::CharacterSet::Standard;
@@ -78,11 +80,12 @@ fn _encoded_word_encode<O>( input: &str, out: &mut O )
             rest_len
         } else {
             let mut tmp_split = max_input_len;
-            // all additional bytes in utf8 start with 0b10xxxxxx so while
+            let rest_bytes = rest.as_bytes();
+
             // the byte at the current index starts with that we are in a
             // position where we can't split and have to move left until
             // the beginning of the utf8
-            while (rest.as_bytes()[tmp_split] & 0b11000000) == 0b10000000 {
+            while is_utf8_continuation_byte(rest_bytes[tmp_split]) {
                 //UNDERFLOW_SAFE: if the string is correct (contains valid utf8) this cant undeflow as
                 // the first byte cant start with 0b10xxxxxx.
                 tmp_split -= 1;
