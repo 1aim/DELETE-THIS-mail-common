@@ -99,7 +99,7 @@ macro_rules! enc_func {
     });
 }
 
-type _EncodeFn = for<'a, 'b: 'a> fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
+type _EncodeFn = for<'a, 'b> fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
 
 #[derive(Clone, Copy)]
 pub struct EncodeFn(_EncodeFn);
@@ -135,11 +135,11 @@ macro_rules! enc_closure {
 
 pub struct EncodeClosure<FN: 'static>(Arc<FN>)
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
+        for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
 
 impl<FN: 'static> EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
+        for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     pub fn new(closure: FN) -> Self {
         EncodeClosure(Arc::new(closure))
@@ -148,7 +148,7 @@ impl<FN: 'static> EncodeClosure<FN>
 
 impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
+        for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     fn encode(&self, encoder:  &mut EncodingWriter) -> Result<(), EncodingError> {
         (self.0)(encoder)
@@ -161,7 +161,7 @@ impl<FN: 'static> EncodableInHeader for EncodeClosure<FN>
 
 impl<FN: 'static> Clone for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
+        for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     fn clone(&self) -> Self {
         EncodeClosure(self.0.clone())
@@ -171,7 +171,7 @@ impl<FN: 'static> Clone for EncodeClosure<FN>
 
 impl<FN: 'static> Debug for EncodeClosure<FN>
     where FN: Send + Sync +
-        for<'a, 'b: 'a> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
+        for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>
 {
     fn fmt(&self, fter: &mut fmt::Formatter) -> fmt::Result {
         write!(fter, "EncodeClosure(..)")
