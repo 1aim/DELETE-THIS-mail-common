@@ -31,7 +31,7 @@ pub mod bind;
 
 pub use self::mail_type::*;
 
-#[cfg(all(not(feature="traceing"), test))]
+#[cfg(all(test, not(feature="traceing")))]
 compile_error! { "testing needs feature `traceing` to be enabled" }
 
 //reexports for exported macros
