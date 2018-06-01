@@ -491,6 +491,20 @@ impl<'inner> EncodingWriter<'inner> {
         self.internal_write_str(s)
     }
 
+    /// like finish_header, but won't start a new line
+    ///
+    /// This is meant to be used when _miss-using_ the
+    /// writer to write a "think", which is not a full
+    /// header. E.g. for testing if a header component
+    /// is written correctly. So you _normally_ should
+    /// not use it.
+    pub fn commit_partial_header(&mut self) {
+        #[cfg(feature="traceing")]
+        { if let Some(&TraceToken::End) = self.trace.last() {}
+            else { self.trace.push(TraceToken::End) } }
+        self.reinit();
+    }
+
     /// finishes the writing of a header
     ///
     /// It makes sure the header ends in "\r\n".
@@ -942,6 +956,17 @@ mod test {
 
         use super::*;
         use super::{ _Encoder as EncodingBuffer };
+
+        #[test]
+        fn commit_partial_and_drop_does_not_panic() {
+            let mut encoder = EncodingBuffer::new(MailType::Ascii);
+            {
+                let mut handle = encoder.writer();
+                assert_ok!(handle.write_str(SoftAsciiStr::from_str_unchecked("12")));
+                handle.commit_partial_header();
+            }
+            assert_eq!(encoder.as_slice(), b"12");
+        }
 
         #[test]
         fn undo_does_undo() {
