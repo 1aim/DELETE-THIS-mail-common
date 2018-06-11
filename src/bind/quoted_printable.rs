@@ -9,7 +9,7 @@ use super::encoded_word::EncodedWordWriter;
 /// but _not_ suited for the encoding in encoded words
 pub fn normal_encode<A: AsRef<[u8]>>(data: A) -> SoftAsciiString {
     let encoded = extern_quoted_printable::encode_to_str(data);
-    SoftAsciiString::from_string_unchecked(encoded)
+    SoftAsciiString::from_unchecked(encoded)
 }
 
 /// a quoted printable decoding suitable for content transfer encoding
@@ -107,7 +107,7 @@ pub fn encoded_word_encode<'a, I, O>(input: I, out: &mut O )
     let max_payload_len = out.max_payload_len();
     let mut remaining = max_payload_len;
     //WARN: on remaining being > 67
-    let mut buf = [SoftAsciiChar::from_char_unchecked('X'); 16];
+    let mut buf = [SoftAsciiChar::from_unchecked('X'); 16];
 
     for chunk in input {
         let mut buf_idx = 0;
@@ -124,11 +124,11 @@ pub fn encoded_word_encode<'a, I, O>(input: I, out: &mut O )
                 b'0'...b'9' |
                 b'A'...b'Z' |
                 b'a'...b'z'  => {
-                    buf[buf_idx] = SoftAsciiChar::from_char_unchecked(byte as char);
+                    buf[buf_idx] = SoftAsciiChar::from_unchecked(byte as char);
                     buf_idx += 1;
                 },
                 _otherwise => {
-                    buf[buf_idx] = SoftAsciiChar::from_char_unchecked('=');
+                    buf[buf_idx] = SoftAsciiChar::from_unchecked('=');
                     buf[buf_idx+1] = lower_nibble_to_hex( byte >> 4 );
                     buf[buf_idx+2] = lower_nibble_to_hex( byte );
                     buf_idx += 3;
@@ -158,7 +158,7 @@ fn lower_nibble_to_hex( half_byte: u8 ) -> SoftAsciiChar {
         'C', 'D', 'E', 'F'
     ];
 
-    SoftAsciiChar::from_char_unchecked(CHARS[ (half_byte & 0x0F) as usize ])
+    SoftAsciiChar::from_unchecked(CHARS[ (half_byte & 0x0F) as usize ])
 }
 
 
@@ -192,7 +192,7 @@ mod test {
             fn $name() {
                 let test_data = $data;
                 let mut out = VecWriter::new(
-                    SoftAsciiStr::from_str_unchecked("utf8"),
+                    SoftAsciiStr::from_unchecked("utf8"),
                     EncodedWordEncoding::QuotedPrintable
                 );
 

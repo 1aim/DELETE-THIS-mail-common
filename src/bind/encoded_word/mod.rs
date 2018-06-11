@@ -17,8 +17,8 @@ impl EncodedWordEncoding {
     pub fn acronym(&self) -> &'static SoftAsciiStr {
         use self::EncodedWordEncoding::*;
         match *self {
-            Base64 => SoftAsciiStr::from_str_unchecked("B"),
-            QuotedPrintable => SoftAsciiStr::from_str_unchecked("Q")
+            Base64 => SoftAsciiStr::from_unchecked("B"),
+            QuotedPrintable => SoftAsciiStr::from_unchecked("Q")
         }
     }
 
@@ -62,8 +62,8 @@ pub trait EncodedWordWriter {
     fn max_payload_len( &self ) -> usize;
 
     fn write_ecw_start( &mut self ) {
-        let qm = SoftAsciiChar::from_char_unchecked('?');
-        self.write_char(SoftAsciiChar::from_char_unchecked('='));
+        let qm = SoftAsciiChar::from_unchecked('?');
+        self.write_char(SoftAsciiChar::from_unchecked('='));
         self.write_char(qm);
         self.write_charset();
         self.write_char(qm);
@@ -73,8 +73,8 @@ pub trait EncodedWordWriter {
     }
 
     fn write_ecw_end( &mut self ) {
-        self.write_char( SoftAsciiChar::from_char_unchecked('?') );
-        self.write_char( SoftAsciiChar::from_char_unchecked('=') );
+        self.write_char( SoftAsciiChar::from_unchecked('?') );
+        self.write_char( SoftAsciiChar::from_unchecked('=') );
     }
 
 

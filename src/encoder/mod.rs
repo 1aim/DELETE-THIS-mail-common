@@ -472,7 +472,7 @@ impl<'inner> EncodingWriter<'inner> {
     /// if mail_type.is_internationalized() {
     ///     handle.write_utf8(text)?;
     /// } else {
-    ///     handle.write_str(SoftAsciiStr::from_str_unchecked(text))?;
+    ///     handle.write_str(SoftAsciiStr::from_unchecked(text))?;
     /// }
     /// ```
     ///
@@ -565,7 +565,7 @@ impl<'inner> EncodingWriter<'inner> {
     /// had been there before).
     pub fn write_fws(&mut self) {
         self.mark_fws_pos();
-        let _ = self.write_char(SoftAsciiChar::from_char_unchecked(' '));
+        let _ = self.write_char(SoftAsciiChar::from_unchecked(' '));
     }
 
 
@@ -962,7 +962,7 @@ mod test {
             let mut encoder = EncodingBuffer::new(MailType::Ascii);
             {
                 let mut handle = encoder.writer();
-                assert_ok!(handle.write_str(SoftAsciiStr::from_str_unchecked("12")));
+                assert_ok!(handle.write_str(SoftAsciiStr::from_unchecked("12")));
                 handle.commit_partial_header();
             }
             assert_eq!(encoder.as_slice(), b"12");
@@ -974,7 +974,7 @@ mod test {
             {
                 let mut handle = encoder.writer();
                 assert_ok!(
-                    handle.write_str(SoftAsciiStr::from_str_unchecked("Header-One: 12")));
+                    handle.write_str(SoftAsciiStr::from_unchecked("Header-One: 12")));
                 handle.undo_header();
             }
             assert_eq!(encoder.as_slice(), b"");
@@ -1250,15 +1250,15 @@ mod test {
             {
                 let mut handle = encoder.writer();
                 for x in 0..998 {
-                    if let Err(_) = handle.write_char(SoftAsciiChar::from_char_unchecked('X')) {
+                    if let Err(_) = handle.write_char(SoftAsciiChar::from_unchecked('X')) {
                         panic!("error when writing char nr.: {:?}", x+1)
                     }
                 }
                 let res = &[
-                    handle.write_char(SoftAsciiChar::from_char_unchecked('X')).is_err(),
-                    handle.write_char(SoftAsciiChar::from_char_unchecked('X')).is_err(),
-                    handle.write_char(SoftAsciiChar::from_char_unchecked('X')).is_err(),
-                    handle.write_char(SoftAsciiChar::from_char_unchecked('X')).is_err(),
+                    handle.write_char(SoftAsciiChar::from_unchecked('X')).is_err(),
+                    handle.write_char(SoftAsciiChar::from_unchecked('X')).is_err(),
+                    handle.write_char(SoftAsciiChar::from_unchecked('X')).is_err(),
+                    handle.write_char(SoftAsciiChar::from_unchecked('X')).is_err(),
                 ];
                 assert_eq!(
                     res, &[true, true, true, true]
@@ -1483,7 +1483,7 @@ mod test {
             {
                 let mut handle = encoder.writer();
                 assert_ok!(handle.write_str(SoftAsciiStr::from_str("Header").unwrap()));
-                assert_ok!(handle.write_char(SoftAsciiChar::from_char_unchecked(':')));
+                assert_ok!(handle.write_char(SoftAsciiChar::from_unchecked(':')));
                 let mut had_cond_failure = false;
                 assert_ok!(handle.write_if_atext("a(b)c")
                     .handle_condition_failure(|_|{had_cond_failure=true; Ok(())}));

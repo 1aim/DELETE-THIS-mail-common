@@ -28,7 +28,7 @@ fn _puny_code_domain(domain: &str)
     match idna::domain_to_ascii(domain) {
         Ok(asciified) => {
             //SAFE: well we converted it to ascii, so it's ascii
-            Ok(SoftAsciiString::from_string_unchecked(asciified))
+            Ok(SoftAsciiString::from_unchecked(asciified))
         },
         Err(_non_informative_err) => {
             Err(EncodingErrorKind::NotEncodable { encoding: "punycode" }.into())

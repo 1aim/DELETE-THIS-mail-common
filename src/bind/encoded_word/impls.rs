@@ -68,7 +68,7 @@ impl<'a, 'b: 'a> WriterWrapper<'a, 'b> {
     pub fn new(encoding: Encoding,
                encoder: &'a mut EncodingWriter<'b> ) -> Self
     {
-        Self::new_with_charset(SoftAsciiStr::from_str_unchecked("utf8"), encoding, encoder)
+        Self::new_with_charset(SoftAsciiStr::from_unchecked("utf8"), encoding, encoder)
     }
 }
 

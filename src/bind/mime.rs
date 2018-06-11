@@ -28,9 +28,9 @@ pub fn percent_encode_param_value<'a, R>(input: &'a R) -> Cow<'a, SoftAsciiStr>
         Cow::Owned(o) =>
             //SAFE: MimeParamEncodingSet makes all non-us-ascii bytes encoded AND
             // percent_encoding::percent_encode always only produces ascii anyway
-            Cow::Owned(SoftAsciiString::from_string_unchecked(o)),
+            Cow::Owned(SoftAsciiString::from_unchecked(o)),
         Cow::Borrowed(b) =>
-            Cow::Borrowed(SoftAsciiStr::from_str_unchecked(b))
+            Cow::Borrowed(SoftAsciiStr::from_unchecked(b))
     }
 }
 

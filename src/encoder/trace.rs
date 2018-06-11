@@ -155,7 +155,7 @@ mod test {
             EncodeClosure::new(|writer| {
                 writer.write_utf8("hy-there")?;
                 writer.write_fws();
-                writer.write_str(SoftAsciiStr::from_str_unchecked("tshau-there"))?;
+                writer.write_str(SoftAsciiStr::from_unchecked("tshau-there"))?;
                 Ok(())
             })
         } => utf8 => [

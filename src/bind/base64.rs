@@ -22,7 +22,7 @@ pub fn normal_encode<R: AsRef<[u8]>>(input: R) -> SoftAsciiString {
         //FIXME: check if line wrap should be used here, I thinks it should
         CHARSET, USE_PADDING, NON_ECW_STRIP_WHITESPACE, LINE_WRAP
     ));
-    SoftAsciiString::from_string_unchecked(res)
+    SoftAsciiString::from_unchecked(res)
 }
 
 #[inline]
@@ -101,7 +101,7 @@ fn _encoded_word_encode<O>( input: &str, out: &mut O )
         //FIXME add a write_str method to EncodedWordWriter
         for ch in buff.chars() {
             //SAFE: base64 consist of only ascii chars
-            out.write_char(SoftAsciiChar::from_char_unchecked(ch))
+            out.write_char(SoftAsciiChar::from_unchecked(ch))
         }
 
         if rest.len() == 0 {
@@ -193,7 +193,7 @@ mod test {
             fn $name() {
                 let test_data = $data;
                 let mut out = VecWriter::new(
-                    SoftAsciiStr::from_str_unchecked("utf8"),
+                    SoftAsciiStr::from_unchecked("utf8"),
                     EncodedWordEncoding::Base64
                 );
 
