@@ -18,7 +18,7 @@ base64 = "0.6.0"
 quoted_printable = "0.4.0"
 idna = "0.1.4"
 percent-encoding = "1.0.0"
-quoted-string = { git="https://github.com/1aim/quoted-string", version="0.5"}
+quoted-string = "0.6"
 media-type-impl-utils = { git="https://github.com/1aim/media-type-impl-utils" }
 soft-ascii-string = "1.0"
 vec1 = "1.0"
