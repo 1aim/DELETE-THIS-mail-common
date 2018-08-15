@@ -87,6 +87,9 @@ impl EncodableInHeaderBoxExt for Box<EncodableInHeader+Send> {
     }
 }
 
+/// Generate a think implementing `EncodableInHeader` from an function.
+///
+/// (Mainly used in the inside of tests.)
 #[macro_export]
 macro_rules! enc_func {
     (|$enc:ident : &mut EncodingWriter| $block:block) => ({
@@ -101,6 +104,7 @@ macro_rules! enc_func {
 
 type _EncodeFn = for<'a, 'b> fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;
 
+/// A wrapper for an function making it implement `EncodableInHeader`.
 #[derive(Clone, Copy)]
 pub struct EncodeFn(_EncodeFn);
 
@@ -126,6 +130,9 @@ impl Debug for EncodeFn {
     }
 }
 
+/// Generate a think implementing `EncodableInHeader` from an closure.
+///
+/// (Mainly used in the inside of tests.)
 #[macro_export]
 macro_rules! enc_closure {
     ($($t:tt)*) => ({
@@ -133,6 +140,7 @@ macro_rules! enc_closure {
     });
 }
 
+/// A wrapper for an closure making it implement `EncodableInHeader`.
 pub struct EncodeClosure<FN: 'static>(Arc<FN>)
     where FN: Send + Sync +
         for<'a, 'b> Fn(&'a mut EncodingWriter<'b>) -> Result<(), EncodingError>;

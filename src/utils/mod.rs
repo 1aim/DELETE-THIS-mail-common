@@ -1,3 +1,8 @@
+//! Some more general utilities.
+//!
+//! Or with other words, thinks which
+//! (currently) have no other place to
+//! be placed in.
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem;
@@ -6,7 +11,7 @@ use std::fmt::{self, Debug};
 mod file_meta;
 pub use self::file_meta::FileMeta;
 
-
+/// Helper for implementing debug for an iterable think where the think on itself is irrelevant.
 pub struct DebugIterableOpaque<I> {
     one_use_inner: RefCell<I>
 }
@@ -56,7 +61,9 @@ pub fn uneraser_ref<GOT: 'static, EXP: 'static>(inp: &GOT ) -> Option<&EXP>  {
     }
 }
 
+
 //FIXME[rust/fat pointer cast]: make it ?Sized once it's supported by rust
+#[doc(hidden)]
 #[inline(always)]
 pub fn uneraser_mut<GOT: 'static, EXP: 'static>(inp: &mut GOT ) -> Option<&mut EXP> {
     if TypeId::of::<GOT>() == TypeId::of::<EXP>() {
@@ -108,6 +115,7 @@ pub fn is_utf8_continuation_byte(b: u8) -> bool {
     (b & 0b11000000) == 0b10000000
 }
 
+/// Faster insertion of byte slices into a byte vector.
 pub fn vec_insert_bytes(target: &mut Vec<u8>, idx: usize, source: &[u8]) {
     use std::ptr::copy;
 
@@ -117,14 +125,13 @@ pub fn vec_insert_bytes(target: &mut Vec<u8>, idx: usize, source: &[u8]) {
     let insertion_point = unsafe { target.as_mut_ptr().offset(idx as isize) };
     let moved_data_len = old_len - idx;
 
-    //1. reserve more storage
     target.reserve(insertion_len);
 
     unsafe {
-        //2. move all bytes after the insertion point `amount` bytes to the right
-        copy(insertion_point, insertion_point.offset(insertion_len as isize), moved_data_len);
+        copy(/*src*/insertion_point,
+             /*dest*/insertion_point.offset(insertion_len as isize),
+             /*count*/moved_data_len);
 
-        //3. copy data from source into the freed region
         copy(source_ptr, insertion_point, insertion_len);
 
         //3. set the new len for the vec

@@ -1,3 +1,4 @@
+//! Module containing the `EncodingError`.
 use std::fmt::{self, Display};
 
 use failure::{Context, Fail, Backtrace};
@@ -7,8 +8,10 @@ pub const UNKNOWN: &str = "<unknown>";
 pub const UTF_8: &str = "utf-8";
 pub const US_ASCII: &str = "us-ascii";
 
+/// A general error appearing when encoding failed in some way.
 #[derive(Copy, Clone, Debug, Fail, PartialEq, Eq, Hash)]
 pub enum EncodingErrorKind {
+
     #[fail(display = "expected <{}> text encoding {} got ",
         expected_encoding, got_encoding)]
     InvalidTextEncoding {
@@ -38,9 +41,14 @@ pub enum EncodingErrorKind {
     //UnsupportedEncoding { encoding: &'static str }
 }
 
-// A error wrt. the used encoding. i.e. the encoding of the encoding or the
-// decoding of the encoding, so it's meant for the current encoding and the
-// future decoding features
+
+/// A general error appearing when encoding failed in some way.
+///
+/// This error consists of an `EncodingErrorKind` and a bit
+/// of contextual information including: The place the error
+/// happened in (`Header { name }`,`Body`), a string representing
+/// the context when it happens (e.g. the word which could not be encoded),
+/// and the mail type.
 #[derive(Debug)]
 pub struct EncodingError {
     inner: Context<EncodingErrorKind>,
@@ -56,24 +64,29 @@ pub enum Place {
 }
 
 impl EncodingError {
+    /// Return the error kind.
     pub fn kind(&self) -> EncodingErrorKind {
         *self.inner.get_context()
     }
 
+    /// Return the mail type used when the error appeared.
     pub fn mail_type(&self) -> Option<MailType> {
         self.mail_type
     }
 
+    /// Returns the str_context associated with the error.
     pub fn str_context(&self) -> Option<&str> {
         self.str_context.as_ref().map(|s| &**s)
     }
 
+    /// Sets the str context.
     pub fn set_str_context<I>(&mut self, ctx: I)
         where I: Into<String>
     {
         self.str_context = Some(ctx.into());
     }
 
+    /// Returns a version of self which has a str context like the given one.
     pub fn with_str_context<I>(mut self, ctx: I) -> Self
         where I: Into<String>
     {
@@ -81,6 +94,7 @@ impl EncodingError {
         self
     }
 
+    /// Adds a place (context) to self if there isn't one and returns self.
     pub fn with_place_or_else<F>(mut self, func: F) -> Self
         where F: FnOnce() -> Option<Place>
     {
@@ -90,6 +104,7 @@ impl EncodingError {
         self
     }
 
+    /// Adds a mail type (context) to self if there isn't one and returns self.
     pub fn with_mail_type_or_else<F>(mut self, func: F) -> Self
         where F: FnOnce() -> Option<MailType>
     {
@@ -157,7 +172,35 @@ impl Display for EncodingError {
     }
 }
 
-
+/// Macro for easier returning an `EncodingError`.
+///
+/// It will use the given input to create and
+/// `EncodingError` _and return it_ (like `try!`/`?`
+/// returns an error, i.e. it places a return statement
+/// in the code).
+///
+/// # Example
+///
+/// ```
+/// # #[macro_use] extern crate mail_common;
+/// # use mail_common::{MailType, error::EncodingError};
+/// # fn main() {
+/// #    fn failed_something() -> bool { true }
+/// #    let func = || -> Result<(), EncodingError> {
+/// if failed_something() {
+///     // Note that the `mail_type: ...` part is not required and
+///     // `EncodingErrorKind` does _not_ need to be imported.
+///     ec_bail!(mail_type: MailType::Internationalized, kind: InvalidTextEncoding {
+///         expected_encoding: "utf-8",
+///         got_encoding: "utf-32"
+///     });
+/// }
+/// #    Ok(())
+/// #    };
+/// #
+/// # }
+/// ```
+///
 #[macro_export]
 macro_rules! ec_bail {
     (kind: $($tt:tt)*) => ({

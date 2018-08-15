@@ -1,3 +1,19 @@
+//! This module provides the encoding buffer.
+//!
+//! The encoding buffer is the buffer header implementations
+//! write there data to. It provides a view special aspects
+//! to make it more robust.
+//!
+//! For example it handles the writing of trailing newlines for headers
+//! (if they don't do it) and it fails if you write utf-8 data
+//! (in the header) to an buffer which knows that the used mail
+//! type doesn't support it.
+//!
+//! There is also a special `tracing` (cargo) feature which
+//! will make it's usage slower, but which will keep track of
+//! what data was inserted in which way making debugging and
+//! writing tests easier. (Through it should _only_ be enabled
+//! for testing and maybe debugging in some cases).
 use std::borrow::Cow;
 use std::str;
 
@@ -47,6 +63,7 @@ pub struct EncodingBuffer {
 
 impl EncodingBuffer {
 
+    /// Create a new buffer only allowing input compatible with a the specified mail type.
     pub fn new(mail_type: MailType) -> Self {
         EncodingBuffer {
             mail_type,
@@ -56,6 +73,7 @@ impl EncodingBuffer {
         }
     }
 
+    /// Returns the mail type for which the buffer was created.
     pub fn mail_type( &self ) -> MailType {
         self.mail_type
     }
@@ -142,14 +160,17 @@ impl EncodingBuffer {
             })
     }
 
+    /// Converts the internal buffer into an utf-8 string if possible.
     pub fn to_string(&self) -> Result<String, EncodingError> {
         Ok(self.as_str()?.to_owned())
     }
 
+    /// Lossy conversion of the internal buffer to an string.
     pub fn to_string_lossy(&self) -> Cow<str> {
         String::from_utf8_lossy(self.buffer.as_slice())
     }
 
+    /// Return a slice view to the underlying buffer.
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
     }
@@ -282,21 +303,25 @@ impl<'inner> EncodingWriter<'inner> {
         { self.trace_start_idx = self.trace.len(); }
     }
 
+    /// Returns true if this type thinks we are in the process of writing a header.
     #[inline]
     pub fn has_unfinished_parts(&self) -> bool {
         self.buffer.len() != self.header_start_idx
     }
 
+    /// Returns the associated mail type.
     #[inline]
     pub fn mail_type(&self) -> MailType {
         self.mail_type
     }
 
+    /// Returns true if the current line has content, i.e. any non WS char.
     #[inline]
     pub fn line_has_content(&self) -> bool {
         self.content_before_fws | self.content_since_fws
     }
 
+    /// Returns the length of the current line in bytes.
     #[inline]
     pub fn current_line_byte_length(&self) -> usize {
         self.buffer.len() - self.line_start_idx

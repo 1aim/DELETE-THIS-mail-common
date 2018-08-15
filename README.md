@@ -1,15 +1,21 @@
 
-# mail-common &emsp; [![Build Status](https://travis-ci.org/1aim/mail_common.svg?branch=master)](https://travis-ci.org/1aim/mail_common)
+# mail-common
 
-**TODO**
+**Provides common/core functionality for the `mail` crate.**
 
 ---
 
-TODO
+The main part of this crate is the `EncodingBuffer` which
+is the place the headers write there content to (in an encoded
+form). Normally nothing in this crate needs to be used, the
+only exception is if you want to write your own mail header
+components for your custom mail header. In which case some
+of the thinks in this crate might prove usefull for you.
+(E.g. the `bind` module which binds some external crates
+like e.g. `quoted-string` and `idna`)
 
-
-Documentation can be [viewed on docs.rs](https://docs.rs/mail-common).
-
+Documentation can be [viewed on docs.rs](https://docs.rs/mail-common)
+(once it is published).
 
 ## License
 

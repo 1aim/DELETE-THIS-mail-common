@@ -1,3 +1,4 @@
+//! Provides common/core functionality for the `mail` crate.
 #![recursion_limit="256"]
 #[macro_use]
 extern crate failure;
@@ -16,7 +17,7 @@ extern crate vec1;
 
 //NOTE: this would be worth it's own independent crate for utility macros
 #[macro_use]
-pub mod macros;
+mod macros;
 #[macro_use]
 pub mod utils;
 mod mail_type;
