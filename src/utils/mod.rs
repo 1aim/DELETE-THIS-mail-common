@@ -8,8 +8,6 @@ use std::cell::RefCell;
 use std::mem;
 use std::fmt::{self, Debug};
 
-mod file_meta;
-pub use self::file_meta::FileMeta;
 
 /// Helper for implementing debug for an iterable think where the think on itself is irrelevant.
 pub struct DebugIterableOpaque<I> {
