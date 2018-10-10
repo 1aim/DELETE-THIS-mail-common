@@ -36,12 +36,11 @@ use ::error::{
 mod trace;
 #[cfg_attr(test, macro_use)]
 mod encodable;
-mod body;
+
 
 #[cfg(feature="traceing")]
 pub use self::trace::*;
 pub use self::encodable::*;
-pub use self::body::*;
 
 /// as specified in RFC 5322 not including CRLF
 pub const LINE_LEN_SOFT_LIMIT: usize = 78;
@@ -49,11 +48,7 @@ pub const LINE_LEN_SOFT_LIMIT: usize = 78;
 pub const LINE_LEN_HARD_LIMIT: usize = 998;
 
 
-/// EncodingBuffer for a Mail providing a buffer for encodable traits
-///
-/// The buffer is a vector of section which either are string
-/// buffers used to mainly encode headers or buffers of type R:BodyBuffer
-/// which represent a valid body payload.
+/// EncodingBuffer for a Mail providing a buffer for encodable traits.
 pub struct EncodingBuffer {
     mail_type: MailType,
     buffer: Vec<u8>,
@@ -124,14 +119,12 @@ impl EncodingBuffer {
     }
 
     /// writes a body to the internal buffer, without verifying it's correctness
-    pub fn write_body_unchecked<B: BodyBuffer>(&mut self, body: &B) -> Result<(), EncodingError> {
-        body.with_slice(|slice| {
-            self.buffer.extend(slice);
-            if !slice.ends_with(b"\r\n") {
-                self.buffer.extend(b"\r\n");
-            }
-            Ok(())
-        })
+    pub fn write_body_unchecked(&mut self, body: &impl AsRef<[u8]>) {
+        let slice = body.as_ref();
+        self.buffer.extend(slice);
+        if !slice.ends_with(b"\r\n") {
+            self.buffer.extend(b"\r\n");
+        }
     }
 
     //TODO impl. a alt. `write_body(body,  boundaries)` which:
@@ -144,9 +137,7 @@ impl EncodingBuffer {
 
     /// # Error
     ///
-    /// This can fail if a body does not contain valid utf8, or
-    /// if `BodyBuffer::with_slice` fails (e.g. because it referred
-    /// to a shared resource which was invalidated)
+    /// This can fail if a body does not contain valid utf8.
     pub fn as_str(&self) -> Result<&str, EncodingError> {
         str::from_utf8(self.buffer.as_slice())
             .map_err(|err| {
@@ -804,30 +795,10 @@ mod test {
 
     use soft_ascii_string::{ SoftAsciiChar, SoftAsciiStr};
     use ::MailType;
-    use ::error::{EncodingError, EncodingErrorKind};
+    use ::error::EncodingErrorKind;
 
     use super::TraceToken::*;
-    use super::{BodyBuffer, EncodingBuffer as _Encoder};
-
-    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    struct VecBody {
-        data: Vec<u8>
-    }
-
-    impl VecBody {
-        fn new(content: &str) -> Self {
-            VecBody { data: content.as_bytes().to_owned() }
-        }
-    }
-
-
-    impl BodyBuffer for VecBody {
-        fn with_slice<FN, R>(&self, func: FN) -> Result<R, EncodingError>
-            where FN: FnOnce(&[u8]) -> Result<R, EncodingError>
-        {
-            func(self.data.as_slice())
-        }
-    }
+    use super::{EncodingBuffer as _Encoder};
 
     mod test_test_utilities {
         use encoder::TraceToken::*;
@@ -956,12 +927,12 @@ mod test {
         #[test]
         fn write_body_unchecked() {
             let mut encoder = EncodingBuffer::new(MailType::Ascii);
-            let body1 = VecBody::new("una body\r\n");
-            let body2 = VecBody::new("another body");
+            let body1 = "una body\r\n";
+            let body2 = "another body";
 
-            encoder.write_body_unchecked(&body1).unwrap();
+            encoder.write_body_unchecked(&body1);
             encoder.write_blank_line();
-            encoder.write_body_unchecked(&body2).unwrap();
+            encoder.write_body_unchecked(&body2);
 
             assert_eq!(
                 encoder.as_slice(),
@@ -1403,7 +1374,7 @@ mod test {
                 assert_ok!(handle.write_utf8("H: yay"));
                 handle.finish_header();
             }
-            encoder.write_body_unchecked(&VecBody::new("da body")).unwrap();
+            encoder.write_body_unchecked(&"da body");
             {
                 let mut handle = encoder.writer();
                 assert_ok!(handle.write_utf8("❤"));
