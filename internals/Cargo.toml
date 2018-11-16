@@ -6,9 +6,9 @@ documentation = "https://docs.rs/mail-internals"
 keywords = ["mail-api"]
 categories = []
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/1aim/mail-internals"
+repository = "https://github.com/1aim/mail"
 version = "0.2.0"
-
+readme = "./README.md"
 
 [dependencies]
 failure = "0.1.1"
