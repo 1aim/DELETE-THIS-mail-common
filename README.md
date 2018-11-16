@@ -1,7 +1,7 @@
 
-# mail-common
+# mail-internal
 
-**Provides common/core functionality for the `mail` crate.**
+**Provides some internal functionality for the `mail` crate.**
 
 ---
 
@@ -14,7 +14,7 @@ of the thinks in this crate might prove usefull for you.
 (E.g. the `bind` module which binds some external crates
 like e.g. `quoted-string` and `idna`)
 
-Documentation can be [viewed on docs.rs](https://docs.rs/mail-common)
+Documentation can be [viewed on docs.rs](https://docs.rs/mail-internals)
 (once it is published).
 
 ## License

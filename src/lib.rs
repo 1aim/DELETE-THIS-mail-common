@@ -1,4 +1,4 @@
-//! Provides common/core functionality for the `mail` crate.
+//! Provides some internal functionality for the `mail` crate.
 #![recursion_limit="256"]
 #[macro_use]
 extern crate failure;

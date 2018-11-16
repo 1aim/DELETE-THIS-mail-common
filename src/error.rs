@@ -182,8 +182,8 @@ impl Display for EncodingError {
 /// # Example
 ///
 /// ```
-/// # #[macro_use] extern crate mail_common;
-/// # use mail_common::{MailType, error::EncodingError};
+/// # #[macro_use] extern crate mail_internals;
+/// # use mail_internals::{MailType, error::EncodingError};
 /// # fn main() {
 /// #    fn failed_something() -> bool { true }
 /// #    let func = || -> Result<(), EncodingError> {
